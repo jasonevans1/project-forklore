@@ -1,0 +1,33 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Laravel Cloud
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+
+      - name: Install Laravel Cloud CLI
+        run: composer global require laravel/cloud-cli --no-interaction
+
+      - name: Authenticate with Laravel Cloud
+        run: |
+          mkdir -p ~/.config/cloud
+          echo '{"api_tokens":["${{ secrets.LARAVEL_CLOUD_TOKEN }}"]}' > ~/.config/cloud/config.json
+
+      - name: Deploy to Laravel Cloud
+        run: cloud deploy
