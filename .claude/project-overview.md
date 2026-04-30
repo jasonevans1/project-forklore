@@ -33,6 +33,17 @@ Mobile-first web app (couples/consumer)
 | **Guided Quiz** | Five quick questions (energy, hunger, new vs. familiar, distance, cuisine) that score favorites and return the best match. |
 | **Tournament** | Head-to-head bracket of 4 or 8 favorites. Tap the winner of each matchup until one remains. For when you want to play, not decide. |
 
+## What makes it different
+Weather and season aware. A 72°F clear evening surfaces patio spots. An 18°F snowstorm hides food trucks and rooftops, boosts cozy indoor favorites. The recommendation card tells you why.
+
+Mixed sources, one list. Your curated favorites live alongside Google Places results when you need to branch out. Any Places discovery you like can be promoted to a favorite in one tap.
+
+User-maintained events. Add recurring events (Wednesday trivia at Smash Park) or one-offs (Valentine's prix fixe) to any restaurant. Share them with other users of the app, or keep them private.
+
+Paralysis-resistant UX. No list views at decision time. No "top 5" screens. Swipe to reject, tap to commit. The app tracks visits to rotate your favorites and surface places you've been neglecting.
+
+Turn-taking. Toggle whose turn it is to pick — the app subtly biases toward the other person's tagged preferences so the same three restaurants don't dominate.
+
 ## Key Integrations
 - **OpenWeather API** — real-time weather context (used in Quick Pick to factor in conditions)
 - **Google Places API** — restaurant discovery; aggressively cached, enforced daily quota cap to control costs
