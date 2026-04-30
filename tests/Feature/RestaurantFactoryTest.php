@@ -1,0 +1,62 @@
+<?php
+
+use App\Enums\IndoorVibe;
+use App\Enums\PatioQuality;
+use App\Enums\RestaurantSource;
+use App\Models\Restaurant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
+
+it('creates a restaurant with factory defaults', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->exists)->toBeTrue()
+        ->and($restaurant->name)->toBeString()->not->toBeEmpty()
+        ->and($restaurant->address)->toBeString()->not->toBeEmpty()
+        ->and($restaurant->source)->toBe(RestaurantSource::Favorite)
+        ->and($restaurant->patio_quality)->toBe(PatioQuality::None)
+        ->and($restaurant->indoor_vibe_when_cold)->toBe(IndoorVibe::Neutral)
+        ->and($restaurant->last_visited_at)->toBeNull()
+        ->and($restaurant->visit_count)->toBe(0);
+});
+
+it('creates a restaurant belonging to a specific user', function () {
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create(['owner_user_id' => $user->id]);
+
+    expect($restaurant->owner_user_id)->toBe($user->id)
+        ->and($restaurant->user->id)->toBe($user->id);
+});
+
+it('generates cuisine_tags as a non-empty array', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->cuisine_tags)->toBeArray()->not->toBeEmpty();
+});
+
+it('generates vibe_tags as a non-empty array', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->vibe_tags)->toBeArray()->not->toBeEmpty();
+});
+
+it('generates a valid price_level between 1 and 4', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->price_level)->toBeInt()->toBeGreaterThanOrEqual(1)->toBeLessThanOrEqual(4);
+});
+
+it('generates a valid RestaurantSource enum value', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->source)->toBeInstanceOf(RestaurantSource::class);
+});
+
+it('generates an address string', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->address)->toBeString()->not->toBeEmpty()
+        ->toContain('Des Moines, IA');
+});

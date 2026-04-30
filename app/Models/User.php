@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -33,7 +34,15 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the user's initials
+     * Get the restaurants owned by this user.
+     */
+    public function restaurants(): HasMany
+    {
+        return $this->hasMany(Restaurant::class, 'owner_user_id');
+    }
+
+    /**
+     * Get the user's initials.
      */
     public function initials(): string
     {
