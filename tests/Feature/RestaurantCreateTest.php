@@ -1,0 +1,180 @@
+<?php
+
+use App\Enums\IndoorVibe;
+use App\Enums\PatioQuality;
+use App\Enums\RestaurantSource;
+use App\Models\Restaurant;
+use App\Models\User;
+use Livewire\Livewire;
+
+it('requires name to save a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', '')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'casual')
+        ->call('save')
+        ->assertHasErrors(['name']);
+});
+
+it('requires non-empty cuisine_tags to save a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Test Place')
+        ->set('cuisine_tags', '')
+        ->set('vibe_tags', 'casual')
+        ->call('save')
+        ->assertHasErrors(['cuisine_tags']);
+});
+
+it('requires non-empty vibe_tags to save a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Test Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', '')
+        ->call('save')
+        ->assertHasErrors(['vibe_tags']);
+});
+
+it('saves a restaurant with valid data and redirects to the index', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Test Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'casual')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('restaurants.index'));
+
+    $this->assertDatabaseHas('restaurants', ['name' => 'Test Place']);
+});
+
+it('sets the owner to the authenticated user on save', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Owned Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'casual')
+        ->call('save');
+
+    $this->assertDatabaseHas('restaurants', [
+        'name' => 'Owned Place',
+        'owner_user_id' => $user->id,
+    ]);
+});
+
+it('sets source to favorite on save', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Fav Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'casual')
+        ->call('save');
+
+    $this->assertDatabaseHas('restaurants', [
+        'name' => 'Fav Place',
+        'source' => RestaurantSource::Favorite->value,
+    ]);
+});
+
+it('splits comma-separated cuisine_tags into an array on save', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Tag Split Place')
+        ->set('cuisine_tags', 'Italian, Pizza')
+        ->set('vibe_tags', 'casual')
+        ->call('save');
+
+    $restaurant = Restaurant::where('name', 'Tag Split Place')->first();
+
+    expect($restaurant->cuisine_tags)->toBe(['Italian', 'Pizza']);
+});
+
+it('splits comma-separated vibe_tags into an array on save', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Vibe Split Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'romantic, casual')
+        ->call('save');
+
+    $restaurant = Restaurant::where('name', 'Vibe Split Place')->first();
+
+    expect($restaurant->vibe_tags)->toBe(['romantic', 'casual']);
+});
+
+it('surfaces validation errors without redirecting', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', '')
+        ->set('cuisine_tags', '')
+        ->set('vibe_tags', '')
+        ->call('save')
+        ->assertHasErrors(['name', 'cuisine_tags', 'vibe_tags'])
+        ->assertNoRedirect();
+});
+
+it('saves optional fields when provided', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Optional Fields Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', 'casual')
+        ->set('address', '123 Main St')
+        ->set('price_level', 2)
+        ->set('avg_duration_minutes', 90)
+        ->set('patio_quality', PatioQuality::Decent->value)
+        ->set('indoor_vibe_when_cold', IndoorVibe::Cozy->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('restaurants', [
+        'name' => 'Optional Fields Place',
+        'address' => '123 Main St',
+        'price_level' => 2,
+        'avg_duration_minutes' => 90,
+        'patio_quality' => PatioQuality::Decent->value,
+        'indoor_vibe_when_cold' => IndoorVibe::Cozy->value,
+    ]);
+});
+
+it('does not expose the source field as user input', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    $this->get(route('restaurants.create'))
+        ->assertOk()
+        ->assertDontSee('name="source"', escape: false);
+});
