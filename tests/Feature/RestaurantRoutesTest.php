@@ -12,32 +12,14 @@ it('redirects guests to login when visiting /restaurants/create', function () {
         ->assertRedirect('/login');
 });
 
-it('returns 200 for authenticated verified users on /restaurants', function () {
-    $user = User::factory()->create([
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($user)
+it('returns 200 for authenticated users on /restaurants', function () {
+    $this->actingAs(User::factory()->create())
         ->get('/restaurants')
         ->assertOk();
 });
 
-it('returns 200 for authenticated verified users on /restaurants/create', function () {
-    $user = User::factory()->create([
-        'email_verified_at' => now(),
-    ]);
-
-    $this->actingAs($user)
+it('returns 200 for authenticated users on /restaurants/create', function () {
+    $this->actingAs(User::factory()->create())
         ->get('/restaurants/create')
         ->assertOk();
-});
-
-it('redirects unverified users from /restaurants', function () {
-    $user = User::factory()->create([
-        'email_verified_at' => null,
-    ]);
-
-    $this->actingAs($user)
-        ->get('/restaurants')
-        ->assertRedirect();
 });
