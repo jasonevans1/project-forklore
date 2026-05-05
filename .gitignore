@@ -22,3 +22,7 @@ yarn-error.log
 /.vscode
 /.zed
 .claude/ralph-loop.local.md
+tests/e2e/.auth/
+.playwright-cli/
+/test-results/
+/playwright-report/

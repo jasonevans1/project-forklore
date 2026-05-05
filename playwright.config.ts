@@ -8,17 +8,23 @@ export default defineConfig({
     workers: process.env.CI ? 1 : undefined,
     reporter: 'html',
     use: {
-        baseURL: process.env.BASE_URL ?? 'http://127.0.0.1:8000',
+        baseURL: process.env.BASE_URL ?? (process.env.CI ? 'http://127.0.0.1:8000' : 'https://project-forklore.ddev.site'),
         trace: 'on-first-retry',
     },
     projects: [
         {
+            name: 'setup',
+            testMatch: /auth\.setup\.ts/,
+        },
+        {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
+            dependencies: ['setup'],
         },
         {
             name: 'mobile',
             use: { ...devices['iPhone 12'] },
+            dependencies: ['setup'],
         },
     ],
 });
