@@ -99,7 +99,7 @@ new #[Title('Add restaurant')] class extends Component {
     <div class="mx-auto max-w-lg px-4 py-6">
         <flux:heading size="xl" class="mb-6">{{ __('Add restaurant') }}</flux:heading>
 
-        <form wire:submit="save" class="space-y-6">
+        <form wire:submit="save" class="space-y-6" novalidate>
             {{-- Name --}}
             <flux:input
                 wire:model="name"
