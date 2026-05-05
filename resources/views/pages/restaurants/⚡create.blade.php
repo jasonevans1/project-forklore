@@ -95,7 +95,7 @@ new #[Title('Add restaurant')] class extends Component {
     }
 }; ?>
 
-<section class="w-full pb-24">
+<section class="w-full">
     <div class="mx-auto max-w-lg px-4 py-6">
         <flux:heading size="xl" class="mb-6">{{ __('Add restaurant') }}</flux:heading>
 
@@ -167,18 +167,12 @@ new #[Title('Add restaurant')] class extends Component {
                 min="1"
                 max="600"
             />
-        </form>
-    </div>
 
-    {{-- Sticky submit bar --}}
-    <div class="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white px-4 py-4 dark:border-zinc-700 dark:bg-zinc-900">
-        <flux:button
-            type="submit"
-            variant="primary"
-            class="w-full"
-            wire:click="save"
-        >
-            {{ __('Add restaurant') }}
-        </flux:button>
+            <div class="flex items-center gap-4">
+                <flux:button type="submit" variant="primary">
+                    {{ __('Add restaurant') }}
+                </flux:button>
+            </div>
+        </form>
     </div>
 </section>
