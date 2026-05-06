@@ -44,7 +44,9 @@ new #[Title('Restaurants')] class extends Component {
             @foreach ($this->restaurants as $restaurant)
                 <flux:card class="w-full">
                     <div class="space-y-3">
-                        <flux:heading size="lg">{{ $restaurant->name }}</flux:heading>
+                        <a href="{{ route('restaurants.show', $restaurant) }}" wire:navigate>
+                            <flux:heading size="lg">{{ $restaurant->name }}</flux:heading>
+                        </a>
 
                         @if (!empty($restaurant->cuisine_tags))
                             <div class="flex flex-wrap gap-2">
