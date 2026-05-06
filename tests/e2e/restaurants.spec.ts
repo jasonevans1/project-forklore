@@ -12,6 +12,16 @@ test('unauthenticated user is redirected to login from /restaurants/create', asy
     await expect(page).toHaveURL(/login/);
 });
 
+test('unauthenticated user is redirected to login from a restaurant show page', async ({ page }) => {
+    await page.goto('/restaurants/1');
+    await expect(page).toHaveURL(/login/);
+});
+
+test('unauthenticated user is redirected to login from a restaurant edit page', async ({ page }) => {
+    await page.goto('/restaurants/1/edit');
+    await expect(page).toHaveURL(/login/);
+});
+
 // ── Authenticated: restaurant index ──────────────────────────────────────────
 
 test.describe('restaurant index', () => {
@@ -92,6 +102,160 @@ test.describe('restaurant create', () => {
         await page.getByRole('button', { name: 'Add restaurant' }).click();
 
         await expect(page).toHaveURL(/\/restaurants$/);
-        await expect(page.getByText('E2E Test Bistro')).toBeVisible();
+        await expect(page.getByRole('link', { name: 'E2E Test Bistro' }).first()).toBeVisible();
+    });
+});
+
+// ── Authenticated: restaurant show ───────────────────────────────────────────
+
+test.describe('restaurant show', () => {
+    test.use({ storageState: 'tests/e2e/.auth/user.json' });
+
+    test('shows the restaurant name as the page heading', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByText("Fong's Pizza", { exact: true }).first()).toBeVisible();
+    });
+
+    test('shows cuisine tags', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByText('pizza', { exact: true })).toBeVisible();
+    });
+
+    test('shows the address', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByText('223 4th St, Des Moines')).toBeVisible();
+    });
+
+    test('shows vibe tags', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByText('lively')).toBeVisible();
+    });
+
+    test('edit button is visible', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByRole('link', { name: 'Edit' })).toBeVisible();
+    });
+
+    test('edit button navigates to the edit page', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await expect(page).toHaveURL(/\/edit$/);
+    });
+
+    test('delete button is visible', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeVisible();
+    });
+
+    test('delete button opens a confirmation modal', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: "Fong's Pizza" }).click();
+        await page.getByRole('button', { name: 'Delete' }).first().click();
+        await expect(page.getByText('Delete restaurant?')).toBeVisible();
+    });
+});
+
+// ── Authenticated: restaurant edit ───────────────────────────────────────────
+
+test.describe('restaurant edit', () => {
+    test.use({ storageState: 'tests/e2e/.auth/user.json' });
+
+    test('shows the page title', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await expect(page).toHaveTitle(/Edit/);
+    });
+
+    test('pre-populates the name field', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('Centro');
+    });
+
+    test('pre-populates the address field', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await expect(page.getByRole('textbox', { name: 'Address' })).toHaveValue('1003 Locust St, Des Moines');
+    });
+
+    test('pre-populates cuisine and vibe tag fields', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await expect(page.getByRole('textbox', { name: 'Cuisine tags' })).toHaveValue('italian');
+        await expect(page.getByRole('textbox', { name: 'Vibe tags' })).toHaveValue('romantic');
+    });
+
+    test('save changes redirects to the show page', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.waitForURL(/\/restaurants\/\d+$/);
+        const showUrl = page.url();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await page.getByRole('button', { name: 'Save changes' }).click();
+        await expect(page).toHaveURL(showUrl);
+    });
+
+    test('cancel button returns to the show page', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.waitForURL(/\/restaurants\/\d+$/);
+        const showUrl = page.url();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        await expect(page).toHaveURL(showUrl);
+    });
+
+    test('shows a validation error when name is cleared', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        await page.getByRole('textbox', { name: 'Name' }).clear();
+        await page.getByRole('button', { name: 'Save changes' }).click();
+        await expect(page.getByText(/required/i).first()).toBeVisible();
+    });
+});
+
+// ── Authenticated: restaurant delete ─────────────────────────────────────────
+
+test.describe('restaurant delete', () => {
+    test.use({ storageState: 'tests/e2e/.auth/user.json' });
+
+    test('cancel in the confirmation modal keeps the user on the show page', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Django' }).click();
+        await page.waitForURL(/\/restaurants\/\d+$/);
+        const showUrl = page.url();
+        await page.getByRole('button', { name: 'Delete' }).first().click();
+        await expect(page.getByText('Delete restaurant?')).toBeVisible();
+        await page.getByRole('button', { name: 'Cancel' }).click();
+        await expect(page).toHaveURL(showUrl);
+    });
+
+    test('confirming delete removes the restaurant and redirects to the index', async ({ page }) => {
+        await page.goto('/restaurants/create');
+        await page.getByRole('textbox', { name: 'Name' }).fill('E2E Delete Target');
+        await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('Test');
+        await page.getByRole('textbox', { name: 'Vibe tags' }).fill('casual');
+        await page.getByRole('button', { name: 'Add restaurant' }).click();
+        await expect(page).toHaveURL(/\/restaurants$/);
+
+        await page.getByRole('link', { name: 'E2E Delete Target' }).click();
+        await page.getByRole('button', { name: 'Delete' }).first().click();
+        await expect(page.getByText('Delete restaurant?')).toBeVisible();
+        await page.getByRole('button', { name: 'Delete' }).last().click();
+
+        await expect(page).toHaveURL(/\/restaurants$/);
+        await expect(page.getByText('E2E Delete Target')).not.toBeVisible();
     });
 });
