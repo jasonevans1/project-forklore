@@ -24,7 +24,7 @@ new #[Title('Restaurant')] class extends Component {
 }; ?>
 
 <div class="w-full">
-    <section class="w-full space-y-6 pb-24">
+    <section class="w-full space-y-6">
         <flux:heading size="xl">{{ $this->restaurant->name }}</flux:heading>
 
         @if ($this->restaurant->address)
@@ -85,20 +85,19 @@ new #[Title('Restaurant')] class extends Component {
                 {{ $this->restaurant->last_visited_at ? $this->restaurant->last_visited_at->format('j M Y') : __('Never') }}
             </flux:text>
         </div>
-    </section>
 
-    {{-- Thumb zone: fixed bottom bar --}}
-    <div class="fixed bottom-0 left-0 right-0 z-10 flex gap-3 border-t border-neutral-200 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900">
-        <flux:button as="link" href="{{ route('restaurants.edit', $this->restaurant) }}" wire:navigate class="flex-1">
-            {{ __('Edit') }}
-        </flux:button>
-
-        <flux:modal.trigger name="delete-restaurant">
-            <flux:button variant="danger" class="flex-1">
-                {{ __('Delete') }}
+        <div class="flex items-center gap-4">
+            <flux:button as="link" href="{{ route('restaurants.edit', $this->restaurant) }}" wire:navigate variant="primary">
+                {{ __('Edit') }}
             </flux:button>
-        </flux:modal.trigger>
-    </div>
+
+            <flux:modal.trigger name="delete-restaurant">
+                <flux:button variant="danger">
+                    {{ __('Delete') }}
+                </flux:button>
+            </flux:modal.trigger>
+        </div>
+    </section>
 
     <flux:modal name="delete-restaurant" class="md:w-96">
         <div class="space-y-4">
