@@ -35,7 +35,11 @@ new #[Title('Edit restaurant')] class extends Component {
         $this->name = $restaurant->name;
         $this->address = $restaurant->address ?? '';
         $this->cuisine_tags = implode(', ', $restaurant->cuisine_tags ?? []);
-        $this->vibe_tags = $restaurant->vibe_tags ?? [];
+        $validTags = \Illuminate\Support\Arr::flatten(config('vibes'));
+        $this->vibe_tags = array_values(array_filter(
+            $restaurant->vibe_tags ?? [],
+            fn (string $tag) => in_array($tag, $validTags, strict: true),
+        ));
         $this->price_level = $restaurant->price_level;
         $this->patio_quality = $restaurant->patio_quality->value;
         $this->indoor_vibe_when_cold = $restaurant->indoor_vibe_when_cold->value;

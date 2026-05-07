@@ -68,7 +68,8 @@ test.describe('restaurant create', () => {
         await expect(page.getByRole('textbox', { name: 'Name' })).toBeVisible();
         await expect(page.getByRole('textbox', { name: 'Address' })).toBeVisible();
         await expect(page.getByRole('textbox', { name: 'Cuisine tags' })).toBeVisible();
-        await expect(page.getByRole('textbox', { name: 'Vibe tags' })).toBeVisible();
+        // Vibe tags is a chip picker — verify chips are rendered
+        await expect(page.getByRole('button', { name: 'casual' })).toBeVisible();
         await expect(page.getByRole('combobox', { name: 'Price level' })).toBeVisible();
         await expect(page.getByRole('combobox', { name: 'Patio quality' })).toBeVisible();
         await expect(page.getByRole('combobox', { name: 'Indoor vibe when cold' })).toBeVisible();
@@ -97,7 +98,9 @@ test.describe('restaurant create', () => {
 
         await page.getByRole('textbox', { name: 'Name' }).fill('E2E Test Bistro');
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('French, Bistro');
-        await page.getByRole('textbox', { name: 'Vibe tags' }).fill('romantic');
+        await page.getByRole('button', { name: 'casual' }).click();
+        // Wait for Livewire to sync chip selection back to the parent component
+        await expect(page.getByRole('button', { name: 'casual' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('combobox', { name: 'Price level' }).selectOption('2');
         await page.getByRole('button', { name: 'Add restaurant' }).click();
 
@@ -188,12 +191,13 @@ test.describe('restaurant edit', () => {
         await expect(page.getByRole('textbox', { name: 'Address' })).toHaveValue('1003 Locust St, Des Moines');
     });
 
-    test('pre-populates cuisine and vibe tag fields', async ({ page }) => {
+    test('pre-populates cuisine tags and shows selected vibe chips', async ({ page }) => {
         await page.goto('/restaurants');
         await page.getByRole('link', { name: 'Centro' }).click();
         await page.getByRole('link', { name: 'Edit' }).click();
         await expect(page.getByRole('textbox', { name: 'Cuisine tags' })).toHaveValue('italian');
-        await expect(page.getByRole('textbox', { name: 'Vibe tags' })).toHaveValue('romantic');
+        // date_night is Centro's saved vibe tag — chip should render in primary (selected) state
+        await expect(page.getByRole('button', { name: 'date night' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
     });
 
     test('save changes redirects to the show page', async ({ page }) => {
@@ -224,6 +228,18 @@ test.describe('restaurant edit', () => {
         await page.getByRole('button', { name: 'Save changes' }).click();
         await expect(page.getByText(/required/i).first()).toBeVisible();
     });
+
+    test('shows a validation error when all vibe chips are deselected', async ({ page }) => {
+        await page.goto('/restaurants');
+        await page.getByRole('link', { name: 'Centro' }).click();
+        await page.getByRole('link', { name: 'Edit' }).click();
+        // Deselect the pre-selected chip to produce an empty vibe_tags array
+        await page.getByRole('button', { name: 'date night' }).click();
+        // Wait for Livewire to sync the deselection back to the parent component
+        await expect(page.getByRole('button', { name: 'date night' })).not.toHaveClass(/bg-\[var\(--color-accent\)\]/);
+        await page.getByRole('button', { name: 'Save changes' }).click();
+        await expect(page.getByText(/required/i).first()).toBeVisible();
+    });
 });
 
 // ── Authenticated: restaurant delete ─────────────────────────────────────────
@@ -246,7 +262,8 @@ test.describe('restaurant delete', () => {
         await page.goto('/restaurants/create');
         await page.getByRole('textbox', { name: 'Name' }).fill('E2E Delete Target');
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('Test');
-        await page.getByRole('textbox', { name: 'Vibe tags' }).fill('casual');
+        await page.getByRole('button', { name: 'casual' }).click();
+        await expect(page.getByRole('button', { name: 'casual' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('button', { name: 'Add restaurant' }).click();
         await expect(page).toHaveURL(/\/restaurants$/);
 
