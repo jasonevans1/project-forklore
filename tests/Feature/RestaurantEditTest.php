@@ -43,16 +43,16 @@ it('pre-populates the cuisine tags as a comma-separated string', function () {
         ->assertSet('cuisine_tags', 'Italian, Pizza');
 });
 
-it('pre-populates the vibe tags as a comma-separated string', function () {
+it('pre-populates vibe_tags as an array from the existing restaurant', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
     $restaurant = Restaurant::factory()->create([
         'owner_user_id' => $user->id,
-        'vibe_tags' => ['romantic', 'casual'],
+        'vibe_tags' => ['casual', 'lively'],
     ]);
 
     Livewire::actingAs($user)
         ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
-        ->assertSet('vibe_tags', 'romantic, casual');
+        ->assertSet('vibe_tags', ['casual', 'lively']);
 });
 
 it('pre-populates the price level with the existing value', function () {
@@ -136,7 +136,7 @@ it('persists updated cuisine_tags as an array after splitting on comma', functio
     expect($restaurant->fresh()->cuisine_tags)->toBe(['Italian', 'Pizza']);
 });
 
-it('persists updated vibe_tags as an array after splitting on comma', function () {
+it('persists updated vibe_tags array to the database', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
     $restaurant = Restaurant::factory()->create([
         'owner_user_id' => $user->id,
@@ -146,10 +146,42 @@ it('persists updated vibe_tags as an array after splitting on comma', function (
 
     Livewire::actingAs($user)
         ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
-        ->set('vibe_tags', 'romantic, lively')
+        ->set('vibe_tags', ['lively', 'cozy'])
         ->call('save');
 
-    expect($restaurant->fresh()->vibe_tags)->toBe(['romantic', 'lively']);
+    expect($restaurant->fresh()->vibe_tags)->toBe(['lively', 'cozy']);
+});
+
+it('rejects an empty vibe_tags array on update', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['casual'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->set('vibe_tags', [])
+        ->call('save')
+        ->assertHasErrors(['vibe_tags'])
+        ->assertNoRedirect();
+});
+
+it('rejects vibe_tags containing a tag not in the taxonomy', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['casual'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->set('vibe_tags', ['romantic'])
+        ->call('save')
+        ->assertHasErrors(['vibe_tags.0'])
+        ->assertNoRedirect();
 });
 
 it('shows validation errors without redirecting when name is empty', function () {
@@ -184,7 +216,7 @@ it('shows validation errors without redirecting when cuisine tags are empty', fu
         ->assertNoRedirect();
 });
 
-it('shows validation errors without redirecting when vibe tags become empty after trimming', function () {
+it('shows validation errors without redirecting when vibe_tags is an empty array', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
     $restaurant = Restaurant::factory()->create([
         'owner_user_id' => $user->id,
@@ -194,7 +226,7 @@ it('shows validation errors without redirecting when vibe tags become empty afte
 
     Livewire::actingAs($user)
         ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
-        ->set('vibe_tags', ',  ,  ')
+        ->set('vibe_tags', [])
         ->call('save')
         ->assertHasErrors(['vibe_tags'])
         ->assertNoRedirect();

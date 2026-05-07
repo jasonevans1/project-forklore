@@ -6,6 +6,7 @@ use App\Enums\RestaurantSource;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 
 uses(RefreshDatabase::class);
 
@@ -40,6 +41,21 @@ it('generates vibe_tags as a non-empty array', function () {
     $restaurant = Restaurant::factory()->create();
 
     expect($restaurant->vibe_tags)->toBeArray()->not->toBeEmpty();
+});
+
+it('creates a restaurant with vibe_tags entries that all exist in the vibes taxonomy', function () {
+    $validTags = Arr::flatten(config('vibes'));
+    $restaurant = Restaurant::factory()->create();
+
+    foreach ($restaurant->vibe_tags as $tag) {
+        expect($validTags)->toContain($tag);
+    }
+});
+
+it('creates a restaurant whose vibe_tags are stored as an array', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->vibe_tags)->toBeArray();
 });
 
 it('generates a valid price_level between 1 and 4', function () {

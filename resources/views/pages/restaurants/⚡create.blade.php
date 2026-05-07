@@ -17,7 +17,7 @@ new #[Title('Add restaurant')] class extends Component {
 
     public string $cuisine_tags = '';
 
-    public string $vibe_tags = '';
+    public array $vibe_tags = [];
 
     public ?int $price_level = null;
 
@@ -36,7 +36,8 @@ new #[Title('Add restaurant')] class extends Component {
             'name' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
             'cuisine_tags' => ['required', 'string', 'max:500'],
-            'vibe_tags' => ['required', 'string', 'max:500'],
+            'vibe_tags' => ['required', 'array', 'min:1'],
+            'vibe_tags.*' => [Rule::in(\Illuminate\Support\Arr::flatten(config('vibes')))],
             'price_level' => ['nullable', 'integer', 'between:1,4'],
             'patio_quality' => ['required', Rule::enum(PatioQuality::class)],
             'indoor_vibe_when_cold' => ['required', Rule::enum(IndoorVibe::class)],
@@ -44,16 +45,9 @@ new #[Title('Add restaurant')] class extends Component {
         ]);
 
         $cuisineTags = $this->splitTags($this->cuisine_tags);
-        $vibeTags = $this->splitTags($this->vibe_tags);
 
         if (empty($cuisineTags)) {
             $this->addError('cuisine_tags', __('At least one cuisine tag is required.'));
-
-            return;
-        }
-
-        if (empty($vibeTags)) {
-            $this->addError('vibe_tags', __('At least one vibe tag is required.'));
 
             return;
         }
@@ -63,7 +57,7 @@ new #[Title('Add restaurant')] class extends Component {
             'name' => $this->name,
             'address' => $this->address ?: null,
             'cuisine_tags' => $cuisineTags,
-            'vibe_tags' => $vibeTags,
+            'vibe_tags' => $this->vibe_tags,
             'price_level' => $this->price_level,
             'patio_quality' => $this->patio_quality,
             'indoor_vibe_when_cold' => $this->indoor_vibe_when_cold,

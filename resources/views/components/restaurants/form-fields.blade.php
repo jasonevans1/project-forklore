@@ -31,13 +31,12 @@
 />
 
 {{-- Vibe Tags --}}
-<flux:input
-    wire:model="vibe_tags"
-    :label="__('Vibe tags')"
-    :description="__('Comma-separated (e.g. romantic, casual)')"
-    type="text"
-    required
-/>
+<div>
+    <flux:label class="mb-2">{{ __('Vibe tags') }}</flux:label>
+    <livewire:vibe-picker wire:model="vibe_tags" />
+    @error('vibe_tags') <flux:error :message="$message" /> @enderror
+    @error('vibe_tags.*') <flux:error :message="$message" /> @enderror
+</div>
 
 {{-- Price Level --}}
 <flux:select wire:model="price_level" :label="__('Price level')">
