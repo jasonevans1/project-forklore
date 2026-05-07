@@ -8,6 +8,7 @@ use App\Enums\RestaurantSource;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Arr;
 
 /**
  * @extends Factory<Restaurant>
@@ -27,7 +28,7 @@ class RestaurantFactory extends Factory
             'address' => fake()->streetAddress().', Des Moines, IA',
             'source' => RestaurantSource::Favorite,
             'cuisine_tags' => [fake()->randomElement(['Italian', 'Mexican', 'American', 'Thai', 'Japanese'])],
-            'vibe_tags' => [fake()->randomElement(['romantic', 'casual', 'lively', 'quiet'])],
+            'vibe_tags' => [fake()->randomElement(Arr::flatten(config('vibes')))],
             'price_level' => fake()->numberBetween(1, 4),
             'patio_quality' => PatioQuality::None,
             'indoor_vibe_when_cold' => IndoorVibe::Neutral,

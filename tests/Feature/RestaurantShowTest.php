@@ -48,12 +48,12 @@ it('shows the vibe tags on the detail page', function () {
     $user = User::factory()->create();
     $restaurant = Restaurant::factory()->create([
         'owner_user_id' => $user->id,
-        'vibe_tags' => ['romantic', 'quiet'],
+        'vibe_tags' => ['date_night', 'quiet'],
     ]);
 
     $this->actingAs($user)
         ->get(route('restaurants.show', $restaurant))
-        ->assertSee('romantic')
+        ->assertSee('date_night')
         ->assertSee('quiet');
 });
 

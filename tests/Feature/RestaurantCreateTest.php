@@ -15,7 +15,7 @@ it('requires name to save a restaurant', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', '')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save')
         ->assertHasErrors(['name']);
 });
@@ -28,7 +28,7 @@ it('requires non-empty cuisine_tags to save a restaurant', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Test Place')
         ->set('cuisine_tags', '')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save')
         ->assertHasErrors(['cuisine_tags']);
 });
@@ -41,7 +41,7 @@ it('requires non-empty vibe_tags to save a restaurant', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Test Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', '')
+        ->set('vibe_tags', [])
         ->call('save')
         ->assertHasErrors(['vibe_tags']);
 });
@@ -54,7 +54,7 @@ it('saves a restaurant with valid data and redirects to the index', function () 
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Test Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save')
         ->assertHasNoErrors()
         ->assertRedirect(route('restaurants.index'));
@@ -70,7 +70,7 @@ it('sets the owner to the authenticated user on save', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Owned Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save');
 
     $this->assertDatabaseHas('restaurants', [
@@ -87,7 +87,7 @@ it('sets source to favorite on save', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Fav Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save');
 
     $this->assertDatabaseHas('restaurants', [
@@ -104,28 +104,12 @@ it('splits comma-separated cuisine_tags into an array on save', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Tag Split Place')
         ->set('cuisine_tags', 'Italian, Pizza')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->call('save');
 
     $restaurant = Restaurant::where('name', 'Tag Split Place')->first();
 
     expect($restaurant->cuisine_tags)->toBe(['Italian', 'Pizza']);
-});
-
-it('splits comma-separated vibe_tags into an array on save', function () {
-    $user = User::factory()->create(['email_verified_at' => now()]);
-
-    $this->actingAs($user);
-
-    Livewire::test('pages::restaurants.create')
-        ->set('name', 'Vibe Split Place')
-        ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'romantic, casual')
-        ->call('save');
-
-    $restaurant = Restaurant::where('name', 'Vibe Split Place')->first();
-
-    expect($restaurant->vibe_tags)->toBe(['romantic', 'casual']);
 });
 
 it('surfaces validation errors without redirecting', function () {
@@ -136,7 +120,7 @@ it('surfaces validation errors without redirecting', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', '')
         ->set('cuisine_tags', '')
-        ->set('vibe_tags', '')
+        ->set('vibe_tags', [])
         ->call('save')
         ->assertHasErrors(['name', 'cuisine_tags', 'vibe_tags'])
         ->assertNoRedirect();
@@ -150,7 +134,7 @@ it('saves optional fields when provided', function () {
     Livewire::test('pages::restaurants.create')
         ->set('name', 'Optional Fields Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', 'casual')
+        ->set('vibe_tags', ['casual'])
         ->set('address', '123 Main St')
         ->set('price_level', 2)
         ->set('avg_duration_minutes', 90)
@@ -167,6 +151,66 @@ it('saves optional fields when provided', function () {
         'patio_quality' => PatioQuality::Decent->value,
         'indoor_vibe_when_cold' => IndoorVibe::Cozy->value,
     ]);
+});
+
+it('saves the vibe_tags array directly to the database without splitting', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Direct Array Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual', 'cozy'])
+        ->call('save');
+
+    $restaurant = Restaurant::where('name', 'Direct Array Place')->first();
+
+    expect($restaurant->vibe_tags)->toBe(['casual', 'cozy']);
+});
+
+it('rejects an empty vibe_tags array with a validation error', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Empty Vibe Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', [])
+        ->call('save')
+        ->assertHasErrors(['vibe_tags']);
+});
+
+it('rejects vibe_tags not in the taxonomy with a validation error', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Bad Vibe Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['not_a_real_vibe'])
+        ->call('save')
+        ->assertHasErrors(['vibe_tags.*']);
+});
+
+it('saves a restaurant with valid vibe tags selected from the taxonomy', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Taxonomy Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual', 'lively'])
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('restaurants.index'));
+
+    $restaurant = Restaurant::where('name', 'Taxonomy Place')->first();
+
+    expect($restaurant->vibe_tags)->toBe(['casual', 'lively']);
 });
 
 it('does not expose the source field as user input', function () {
