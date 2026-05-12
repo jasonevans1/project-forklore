@@ -32,10 +32,158 @@ composer run dev                        # start full dev stack
 - Descriptive names: `isRecentlyVisited` not `visited()`
 
 ## Detailed Configuration
-- `.claude/project-overview.md` — project identity, modes, API integrations
-- `.claude/architecture.md` — directory structure, patterns, decision mode flows
 - `.claude/testing.md` — test commands, TDD methodology, conventions
-- `.claude/code-standards.md` — linting, naming, PHP standards
+
+---
+
+# Project Overview
+
+## Project Name
+Forklore
+
+## Description
+A mobile-first Laravel app that ends the "I don't know, what do you want?" conversation. Built for couples who want to pick a restaurant without scrolling through endless lists or debating options. Every path through the app ends with **one restaurant**, not five.
+
+## Core Philosophy
+- Always resolve to a single result — never present a list to choose from
+- Decisions should feel fun, not like work
+- Mobile-first: thumb-friendly, fast, works in low-attention moments
+
+## Tech Stack
+- **Language**: PHP 8.4
+- **Framework**: Laravel 13
+- **Realtime UI**: Livewire 4 + Flux UI 2
+- **Auth**: Laravel Fortify v1
+- **Frontend**: Tailwind CSS 4, Vite 8
+- **Testing**: Pest 4 + pest-plugin-laravel
+- **Linting**: Laravel Pint 1
+- **Database**: SQLite (local), configurable
+
+## Project Type
+Mobile-first web app (couples/consumer)
+
+## Four Decision Modes
+
+| Mode | Description |
+|------|-------------|
+| **Quick Pick** | One tap. Weather-aware, time-aware, skips recently visited places. Best for "we're hungry, decide now." |
+| **Something Happening Tonight** | Filters to restaurants with trivia, live music, bingo, or specials starting in the next few hours. |
+| **Guided Quiz** | Five quick questions (energy, hunger, new vs. familiar, distance, cuisine) that score favorites and return the best match. |
+| **Tournament** | Head-to-head bracket of 4 or 8 favorites. Tap the winner of each matchup until one remains. For when you want to play, not decide. |
+
+## What makes it different
+Weather and season aware. A 72°F clear evening surfaces patio spots. An 18°F snowstorm hides food trucks and rooftops, boosts cozy indoor favorites. The recommendation card tells you why.
+
+Mixed sources, one list. Your curated favorites live alongside Google Places results when you need to branch out. Any Places discovery you like can be promoted to a favorite in one tap.
+
+User-maintained events. Add recurring events (Wednesday trivia at Smash Park) or one-offs (Valentine's prix fixe) to any restaurant. Share them with other users of the app, or keep them private.
+
+Paralysis-resistant UX. No list views at decision time. No "top 5" screens. Swipe to reject, tap to commit. The app tracks visits to rotate your favorites and surface places you've been neglecting.
+
+Turn-taking. Toggle whose turn it is to pick — the app subtly biases toward the other person's tagged preferences so the same three restaurants don't dominate.
+
+## Key Integrations
+- **OpenWeather API** — real-time weather context (used in Quick Pick to factor in conditions)
+- **Google Places API** — restaurant discovery; aggressively cached, enforced daily quota cap to control costs
+
+---
+
+# Architecture
+
+## Directory Structure
+
+```
+app/
+├── Actions/          # Single-purpose action classes
+│   └── Fortify/      # Fortify auth action overrides
+├── Concerns/         # Shared traits
+├── Http/
+│   └── Controllers/  # HTTP request handlers (thin, delegate to actions/services)
+├── Livewire/         # Livewire components (mobile-first UI)
+│   └── Actions/      # Livewire action methods
+├── Models/           # Eloquent models
+└── Providers/        # Service providers
+
+tests/
+├── Unit/             # Unit tests (mirror app/ structure)
+└── Feature/          # Integration/feature tests
+    ├── Auth/
+    └── Settings/
+```
+
+## Patterns Used
+
+- **Actions** — single-purpose classes for discrete operations (e.g., `CreateRestaurant`, `ScoreQuizResult`). All Fortify auth hooks live in `app/Actions/Fortify/`.
+- **Service classes** — business logic that spans multiple models or external APIs (e.g., `PlacesService`, `WeatherService`).
+- Livewire components handle UI state server-side; Alpine.js for lightweight client interactions.
+
+## Decision Modes — Conceptual Flow
+
+Each mode takes a user's favorites/preferences and resolves to **exactly one restaurant**:
+
+| Mode | Key Logic |
+|------|-----------|
+| Quick Pick | Score favorites by weather suitability + time of day + recency penalty |
+| Something Happening Tonight | Filter by active events in next N hours via Places API |
+| Guided Quiz | 5-question weighted scoring against favorite attributes |
+| Tournament | Bracket elimination — N favorites → 1 winner via user taps |
+
+## External Integrations
+
+- **OpenWeather API** — called per location + time window, cached in Laravel cache. Used by Quick Pick to adjust scores based on conditions (rainy → prefer indoor; sunny → prefer patios).
+- **Google Places API** — restaurant discovery and detail fetches. Must be aggressively cached (restaurant data doesn't change hourly). A daily quota cap is enforced — design features to work within the budget, never assume unlimited calls.
+
+## Key Conventions
+- Mobile-first: every Livewire component must be usable on a small phone screen
+- Every user-facing flow ends with one result — never expose a list for the user to pick from
+- Prefer server-side state in Livewire; keep Alpine.js for animations and micro-interactions only
+
+---
+
+# Code Standards
+
+## Style Guide
+PSR-12 enforced by Laravel Pint
+
+## Linting
+
+```bash
+# Auto-fix (run after modifying any PHP file)
+vendor/bin/pint --dirty --format agent
+
+# Check only (CI gate)
+vendor/bin/pint --parallel --test
+```
+
+## Pre-commit Checks
+- Run Pint fix (`vendor/bin/pint --dirty --format agent`) before finalizing any PHP changes
+- All tests must pass
+- Never skip hooks (`--no-verify`)
+
+## Naming Conventions
+- Classes: `PascalCase`
+- Methods/Variables: `camelCase`, descriptive (`isRecentlyVisited`, not `visited()`)
+- Constants: `SCREAMING_SNAKE_CASE`
+- Enum keys: `TitleCase` (`QuickPick`, `GuidedQuiz`)
+- Files: match class name
+
+## PHP Standards
+- PHP 8 constructor property promotion: `public function __construct(public PlacesService $places) {}`
+- Explicit return type declarations on all methods
+- Type hints on all parameters; use `?Type` for nullable
+- Curly braces on all control structures, even single-line bodies
+- PHPDoc blocks with array shape types for complex structures — prefer over inline comments
+
+## Architecture Rules
+- Use `php artisan make:` commands to create new files
+- Pass `--no-interaction` to all Artisan commands
+- Prefer named routes and `route()` for URL generation
+- One class per file; stick to the existing directory structure
+
+## API Integration Standards
+- Google Places API results must be cached aggressively; never call the API on every request
+- Enforce daily quota cap on Places API — design around budget, not unlimited calls
+- OpenWeather API calls should be cached per location + time window
 
 <laravel-boost-guidelines>
 === foundation rules ===
