@@ -19,5 +19,7 @@ readonly class QuickPickFilters
         public ?float $max_distance_miles = null,
         public ?float $lat = null,
         public ?float $lng = null,
+        /** @var list<int> Restaurant IDs excluded for this session (e.g. rejected picks). */
+        public array $excludedIds = [],
     ) {}
 }

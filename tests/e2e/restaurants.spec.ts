@@ -259,20 +259,23 @@ test.describe('restaurant delete', () => {
     });
 
     test('confirming delete removes the restaurant and redirects to the index', async ({ page }) => {
+        // Use a unique name so stale data from prior runs never causes ambiguous locators.
+        const name = `E2E Delete Target ${Date.now()}`;
+
         await page.goto('/restaurants/create');
-        await page.getByRole('textbox', { name: 'Name' }).fill('E2E Delete Target');
+        await page.getByRole('textbox', { name: 'Name' }).fill(name);
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('Test');
         await page.getByRole('button', { name: 'casual' }).click();
         await expect(page.getByRole('button', { name: 'casual' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('button', { name: 'Add restaurant' }).click();
         await expect(page).toHaveURL(/\/restaurants$/);
 
-        await page.getByRole('link', { name: 'E2E Delete Target' }).click();
+        await page.getByRole('link', { name }).click();
         await page.getByRole('button', { name: 'Delete' }).first().click();
         await expect(page.getByText('Delete restaurant?')).toBeVisible();
         await page.getByRole('button', { name: 'Delete' }).last().click();
 
         await expect(page).toHaveURL(/\/restaurants$/);
-        await expect(page.getByText('E2E Delete Target')).not.toBeVisible();
+        await expect(page.getByRole('link', { name })).not.toBeVisible();
     });
 });

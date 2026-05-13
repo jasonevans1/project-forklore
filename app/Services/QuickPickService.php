@@ -73,8 +73,10 @@ class QuickPickService
             ->pluck('restaurant_id')
             ->all();
 
+        $allExcludedIds = array_unique(array_merge($recentlyVisitedIds, $filters->excludedIds));
+
         $query = Restaurant::ownedBy($user)
-            ->whereNotIn('id', $recentlyVisitedIds);
+            ->whereNotIn('id', $allExcludedIds);
 
         if ($filters->budget_max !== null) {
             $query->where('price_level', '<=', $filters->budget_max);
