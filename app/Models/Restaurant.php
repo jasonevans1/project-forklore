@@ -61,6 +61,11 @@ class Restaurant extends Model
         return $this->hasMany(Visit::class);
     }
 
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
     /**
      * Scope restaurants to a specific owner.
      */
