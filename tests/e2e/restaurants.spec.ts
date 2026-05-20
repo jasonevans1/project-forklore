@@ -94,9 +94,12 @@ test.describe('restaurant create', () => {
     });
 
     test('saves a restaurant and redirects to the index on valid submission', async ({ page }) => {
+        // Use a unique name so repeated runs never leave stale rows in the pool.
+        const name = `E2E Create Test ${Date.now()}`;
+
         await page.goto('/restaurants/create');
 
-        await page.getByRole('textbox', { name: 'Name' }).fill('E2E Test Bistro');
+        await page.getByRole('textbox', { name: 'Name' }).fill(name);
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('French, Bistro');
         await page.getByRole('button', { name: 'casual' }).click();
         // Wait for Livewire to sync chip selection back to the parent component
@@ -105,7 +108,15 @@ test.describe('restaurant create', () => {
         await page.getByRole('button', { name: 'Add restaurant' }).click();
 
         await expect(page).toHaveURL(/\/restaurants$/);
-        await expect(page.getByRole('link', { name: 'E2E Test Bistro' }).first()).toBeVisible();
+        await expect(page.getByRole('link', { name }).first()).toBeVisible();
+
+        // Clean up: delete the created restaurant so it doesn't pollute the quick-pick pool.
+        await page.getByRole('link', { name }).first().click();
+        await page.waitForURL(/\/restaurants\/\d+$/);
+        await page.getByRole('button', { name: 'Delete' }).first().click();
+        await expect(page.getByText('Delete restaurant?')).toBeVisible();
+        await page.getByRole('button', { name: 'Delete' }).last().click();
+        await expect(page).toHaveURL(/\/restaurants$/);
     });
 });
 
