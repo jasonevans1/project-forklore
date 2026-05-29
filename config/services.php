@@ -39,4 +39,9 @@ return [
         'key' => env('OPENWEATHER_API_KEY'),
     ],
 
+    'google_places' => [
+        'key' => env('GOOGLE_PLACES_API_KEY'),
+        'daily_quota' => (int) env('GOOGLE_PLACES_DAILY_QUOTA', 1000),
+    ],
+
 ];
