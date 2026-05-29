@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\RestaurantSource;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
@@ -32,12 +34,26 @@ class QuickPickService
     private const int WEATHER_DEPENDENT_PENALTY = 50;
 
     /**
+     * Base score for Places-sourced candidates (lower than favorites to ensure
+     * user-curated restaurants are always preferred when both are available).
+     */
+    private const int PLACES_BASE_SCORE = 70;
+
+    /**
+     * Minimum number of favorites required to skip the Places API fallback.
+     */
+    private const int PLACES_FALLBACK_THRESHOLD = 3;
+
+    /**
      * Maximum score gap from the best candidate to still be considered "top".
      * Candidates within this many points of the highest scorer are eligible.
      */
     private const int TOP_CANDIDATE_WINDOW = 10;
 
-    public function __construct(private readonly WeatherService $weather) {}
+    public function __construct(
+        private readonly WeatherService $weather,
+        private readonly PlacesService $places,
+    ) {}
 
     /**
      * Pick one restaurant for the given user, or return null if the pool is empty.
@@ -45,6 +61,10 @@ class QuickPickService
     public function pick(User $user, QuickPickFilters $filters = new QuickPickFilters): ?Restaurant
     {
         $pool = $this->buildPool($user, $filters);
+
+        if ($pool->count() < self::PLACES_FALLBACK_THRESHOLD) {
+            $pool = $this->withPlacesFallback($pool, $user, $filters);
+        }
 
         if ($pool->isEmpty()) {
             return null;
@@ -76,6 +96,7 @@ class QuickPickService
         $allExcludedIds = array_unique(array_merge($recentlyVisitedIds, $filters->excludedIds));
 
         $query = Restaurant::ownedBy($user)
+            ->favorites()
             ->whereNotIn('id', $allExcludedIds);
 
         if ($filters->budget_max !== null) {
@@ -112,6 +133,67 @@ class QuickPickService
     }
 
     // -------------------------------------------------------------------------
+    // Places fallback
+    // -------------------------------------------------------------------------
+
+    /**
+     * Fetch Places results and merge them into the candidate pool.
+     * Only runs when lat/lng are available in the filters.
+     *
+     * @param  Collection<int, Restaurant>  $pool
+     * @return Collection<int, Restaurant>
+     */
+    private function withPlacesFallback(Collection $pool, User $user, QuickPickFilters $filters): Collection
+    {
+        if ($filters->lat === null || $filters->lng === null) {
+            return $pool;
+        }
+
+        $results = $this->places->nearbySearch($filters->lat, $filters->lng);
+
+        if (empty($results)) {
+            return $pool;
+        }
+
+        $placesRestaurants = collect($results)
+            ->map(fn (array $place) => $this->upsertPlacesRestaurant($place, $user))
+            ->filter()
+            ->values();
+
+        return $pool->merge($placesRestaurants);
+    }
+
+    /**
+     * Insert or update a Places-sourced restaurant row and return the model.
+     *
+     * @param  array<string, mixed>  $place
+     */
+    private function upsertPlacesRestaurant(array $place, User $user): ?Restaurant
+    {
+        if (empty($place['id'])) {
+            return null;
+        }
+
+        return Restaurant::updateOrCreate(
+            [
+                'owner_user_id' => $user->id,
+                'places_id' => $place['id'],
+            ],
+            [
+                'name' => $place['name'] ?? 'Unknown',
+                'address' => $place['address'] ?? null,
+                'lat' => $place['lat'] ?? null,
+                'lng' => $place['lng'] ?? null,
+                'source' => RestaurantSource::Places,
+                'cuisine_tags' => [],
+                'vibe_tags' => [],
+                'patio_quality' => PatioQuality::None,
+                'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+            ]
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // Scoring
     // -------------------------------------------------------------------------
 
@@ -124,7 +206,9 @@ class QuickPickService
     private function scoreAll(Collection $restaurants, ?WeatherData $weather): Collection
     {
         return $restaurants->map(function (Restaurant $restaurant) use ($weather): array {
-            $score = 100;
+            $score = $restaurant->source === RestaurantSource::Places
+                ? self::PLACES_BASE_SCORE
+                : 100;
 
             if ($weather !== null) {
                 $tempF = $this->toFahrenheit($weather->temperature);
