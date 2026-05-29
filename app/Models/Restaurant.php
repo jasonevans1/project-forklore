@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'vibe_tags',
     'price_level',
     'source',
+    'places_id',
     'patio_quality',
     'indoor_vibe_when_cold',
     'avg_duration_minutes',
@@ -72,5 +73,13 @@ class Restaurant extends Model
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
         return $query->where('owner_user_id', $user->id);
+    }
+
+    /**
+     * Scope to user-curated favorites only (excludes Places-sourced discoveries).
+     */
+    public function scopeFavorites(Builder $query): Builder
+    {
+        return $query->where('source', RestaurantSource::Favorite);
     }
 }

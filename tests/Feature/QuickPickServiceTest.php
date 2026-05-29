@@ -4,6 +4,7 @@ use App\Enums\PatioQuality;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
+use App\Services\PlacesService;
 use App\Services\QuickPickFilters;
 use App\Services\QuickPickService;
 use App\Services\WeatherData;
@@ -21,7 +22,11 @@ beforeEach(function () {
     $this->weatherMock = Mockery::mock(WeatherService::class);
     $this->weatherMock->allows('fetch')->andReturnNull()->byDefault();
 
-    $this->service = new QuickPickService($this->weatherMock);
+    // Places service stub — always returns null so it never influences existing tests.
+    $this->placesMock = Mockery::mock(PlacesService::class);
+    $this->placesMock->allows('nearbySearch')->andReturnNull()->byDefault();
+
+    $this->service = new QuickPickService($this->weatherMock, $this->placesMock);
 
     $this->user = User::factory()->create();
 
