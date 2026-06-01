@@ -21,6 +21,9 @@
                     <flux:sidebar.item icon="calendar" :href="route('tonight')" :current="request()->routeIs('tonight')" wire:navigate>
                         {{ __('Tonight') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="question-mark-circle" :href="route('quiz')" :current="request()->routeIs('quiz')" wire:navigate>
+                        {{ __('Quiz') }}
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
