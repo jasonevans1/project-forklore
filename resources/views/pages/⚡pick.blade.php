@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\PromotePlacesToFavorite;
 use App\Enums\IndoorVibe;
 use App\Enums\ModeUsed;
 use App\Enums\PatioQuality;
@@ -96,6 +97,21 @@ new #[Title('Quick Pick')] class extends Component {
         Flux::toast(variant: 'success', text: __('Enjoy your meal! 🍽️'));
 
         $this->redirect(route('dashboard'), navigate: true);
+    }
+
+    /**
+     * Promote a Places-sourced restaurant to the user's favorites and open the edit screen
+     * so they can add vibe tags and notes.
+     */
+    public function saveAsFavorite(): void
+    {
+        $restaurant = Restaurant::findOrFail($this->restaurantId);
+
+        $this->authorize('update', $restaurant);
+
+        app(PromotePlacesToFavorite::class)->execute($restaurant, Auth::user());
+
+        $this->redirect(route('restaurants.edit', $restaurant), navigate: true);
     }
 
     /**
@@ -325,6 +341,16 @@ new #[Title('Quick Pick')] class extends Component {
                 >
                     {{ __('Going ✓') }}
                 </flux:button>
+
+                @if ($this->restaurant->source === \App\Enums\RestaurantSource::Places)
+                    <flux:button
+                        variant="filled"
+                        class="w-full py-4 text-base"
+                        wire:click="saveAsFavorite"
+                    >
+                        {{ __('Save as favorite') }}
+                    </flux:button>
+                @endif
 
                 <flux:button
                     class="w-full py-4 text-base"
