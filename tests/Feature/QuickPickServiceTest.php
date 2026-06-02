@@ -114,13 +114,13 @@ it('excludes restaurants visited within the last 14 days', function () {
     expect($this->service->pick($this->user)?->id)->toBe($eligible->id);
 });
 
-it('includes restaurants whose last visit was exactly 15 days ago', function () {
+it('includes restaurants whose last visit was exactly 22 days ago', function () {
     $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
 
     Visit::factory()->create([
         'user_id' => $this->user->id,
         'restaurant_id' => $restaurant->id,
-        'visited_at' => now()->subDays(15),
+        'visited_at' => now()->subDays(22),
     ]);
 
     expect($this->service->pick($this->user))->not->toBeNull();

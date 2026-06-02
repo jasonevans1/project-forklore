@@ -27,6 +27,9 @@
                     <flux:sidebar.item icon="trophy" :href="route('tournament')" :current="request()->routeIs('tournament')" wire:navigate>
                         {{ __('Tournament') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="clock" :href="route('history')" :current="request()->routeIs('history')" wire:navigate>
+                        {{ __('History') }}
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

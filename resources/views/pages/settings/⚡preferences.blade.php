@@ -10,9 +10,12 @@ new #[Title('Preferences')] class extends Component {
     /** @var list<string> */
     public array $preferredVibeTags = [];
 
+    public bool $allowRepeats = false;
+
     public function mount(): void
     {
         $this->preferredVibeTags = Auth::user()->preferred_vibe_tags ?? [];
+        $this->allowRepeats = (bool) Auth::user()->allow_repeats;
     }
 
     public function save(): void
@@ -22,9 +25,13 @@ new #[Title('Preferences')] class extends Component {
         $this->validate([
             'preferredVibeTags' => ['array'],
             'preferredVibeTags.*' => ['string', Rule::in($allTags)],
+            'allowRepeats' => ['boolean'],
         ]);
 
-        Auth::user()->update(['preferred_vibe_tags' => $this->preferredVibeTags]);
+        Auth::user()->update([
+            'preferred_vibe_tags' => $this->preferredVibeTags,
+            'allow_repeats' => $this->allowRepeats,
+        ]);
 
         Flux::toast(variant: 'success', text: __('Preferences saved.'));
     }
@@ -60,6 +67,14 @@ new #[Title('Preferences')] class extends Component {
         @error('preferredVibeTags.*')
             <flux:text class="text-red-500">{{ $message }}</flux:text>
         @enderror
+
+        <div class="border-t border-zinc-200 pt-6 dark:border-zinc-700">
+            <flux:field>
+                <flux:label>{{ __('Allow repeats within 3 weeks') }}</flux:label>
+                <flux:description>{{ __("When on, recently visited restaurants can appear again in Quick Pick.") }}</flux:description>
+                <flux:switch wire:model="allowRepeats" />
+            </flux:field>
+        </div>
 
         <flux:button type="submit" variant="primary">
             {{ __('Save preferences') }}

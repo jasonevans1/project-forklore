@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'partner_id', 'preferred_vibe_tags'])]
+#[Fillable(['name', 'email', 'password', 'partner_id', 'preferred_vibe_tags', 'allow_repeats'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -31,6 +31,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'preferred_vibe_tags' => 'array',
+            'allow_repeats' => 'boolean',
         ];
     }
 

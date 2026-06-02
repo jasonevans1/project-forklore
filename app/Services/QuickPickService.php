@@ -13,8 +13,8 @@ use Illuminate\Support\Collection;
 
 class QuickPickService
 {
-    /** Days within which a visited restaurant is excluded from the pool. */
-    private const int RECENCY_DAYS = 14;
+    /** Days within which a visited restaurant is excluded from the pool (3 weeks). */
+    private const int RECENCY_DAYS = 21;
 
     /** Lower bound (°F) of the patio-boost temperature window. */
     private const float PATIO_BOOST_MIN_F = 65.0;
@@ -91,7 +91,7 @@ class QuickPickService
      */
     private function buildPool(User $user, QuickPickFilters $filters): Collection
     {
-        $recentlyVisitedIds = Visit::query()
+        $recentlyVisitedIds = $user->allow_repeats ? [] : Visit::query()
             ->where('user_id', $user->id)
             ->where('visited_at', '>=', now()->subDays(self::RECENCY_DAYS))
             ->pluck('restaurant_id')
