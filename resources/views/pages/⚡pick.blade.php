@@ -2,6 +2,7 @@
 
 use App\Actions\PromotePlacesToFavorite;
 use App\Enums\IndoorVibe;
+use App\Models\HouseholdState;
 use App\Enums\ModeUsed;
 use App\Enums\PatioQuality;
 use App\Models\Restaurant;
@@ -93,6 +94,7 @@ new #[Title('Quick Pick')] class extends Component {
 
         $restaurant->increment('visit_count');
         $restaurant->update(['last_visited_at' => now()]);
+        HouseholdState::recordPick(Auth::user());
 
         Flux::toast(variant: 'success', text: __('Enjoy your meal! 🍽️'));
 
@@ -231,6 +233,16 @@ new #[Title('Quick Pick')] class extends Component {
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'idle')
         <div class="flex flex-1 flex-col items-center justify-end gap-4 px-6 pb-16">
+            @php $partner = Auth::user()->partner; @endphp
+            @if ($partner)
+                <p class="text-sm text-neutral-400 dark:text-neutral-500">
+                    @if (\App\Models\HouseholdState::isPartnersTurn(Auth::user()))
+                        {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
+                    @else
+                        {{ __('Your turn') }}
+                    @endif
+                </p>
+            @endif
             <flux:heading size="xl" class="text-center text-2xl font-bold">
                 {{ __("Can't decide where to eat?") }}
             </flux:heading>

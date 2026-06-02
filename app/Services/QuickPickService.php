@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
 use App\Enums\RestaurantSource;
+use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
@@ -26,6 +27,9 @@ class QuickPickService
 
     /** Score bonus applied to patio restaurants in ideal weather. */
     private const int PATIO_BOOST_DECENT = 20;
+
+    /** Score bonus applied when a restaurant matches the partner's preferred vibe tags. */
+    private const int PARTNER_PREF_BOOST = 25;
 
     /** Score bonus applied to destination-patio restaurants in ideal weather. */
     private const int PATIO_BOOST_DESTINATION = 40;
@@ -71,7 +75,7 @@ class QuickPickService
         }
 
         $weather = $this->resolveWeather($filters);
-        $scored = $this->scoreAll($pool, $weather);
+        $scored = $this->scoreAll($pool, $weather, $user);
 
         return $this->pickFromTop($scored);
     }
@@ -203,12 +207,22 @@ class QuickPickService
      * @param  Collection<int, Restaurant>  $restaurants
      * @return Collection<int, array{restaurant: Restaurant, score: int}>
      */
-    private function scoreAll(Collection $restaurants, ?WeatherData $weather): Collection
+    private function scoreAll(Collection $restaurants, ?WeatherData $weather, User $user): Collection
     {
-        return $restaurants->map(function (Restaurant $restaurant) use ($weather): array {
+        $partnerTags = $this->resolvePartnerPreferredTags($user);
+
+        return $restaurants->map(function (Restaurant $restaurant) use ($weather, $partnerTags): array {
             $score = $restaurant->source === RestaurantSource::Places
                 ? self::PLACES_BASE_SCORE
                 : 100;
+
+            // Partner turn bias — boost restaurants matching the partner's preferred vibe tags.
+            if (! empty($partnerTags)) {
+                $restaurantVibes = $restaurant->vibe_tags ?? [];
+                if (! empty(array_intersect($partnerTags, $restaurantVibes))) {
+                    $score += self::PARTNER_PREF_BOOST;
+                }
+            }
 
             if ($weather !== null) {
                 $tempF = $this->toFahrenheit($weather->temperature);
@@ -257,6 +271,22 @@ class QuickPickService
     // -------------------------------------------------------------------------
     // Weather helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Return the partner's preferred vibe tags when it is the partner's turn, or an empty array.
+     *
+     * @return list<string>
+     */
+    private function resolvePartnerPreferredTags(User $user): array
+    {
+        if (! HouseholdState::isPartnersTurn($user)) {
+            return [];
+        }
+
+        $partner = $user->partner;
+
+        return $partner?->preferred_vibe_tags ?? [];
+    }
 
     private function resolveWeather(QuickPickFilters $filters): ?WeatherData
     {
