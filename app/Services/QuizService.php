@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\PatioQuality;
+use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -40,6 +41,9 @@ class QuizService
     /** Penalty for weather_dependent restaurants in bad weather. */
     private const int WEATHER_DEPENDENT_PENALTY = 50;
 
+    /** Bonus applied when a restaurant matches the partner's preferred vibe tags. */
+    private const int PARTNER_PREF_BOOST = 25;
+
     /** Ideal patio lower bound (°F). */
     private const float PATIO_BOOST_MIN_F = 65.0;
 
@@ -73,7 +77,7 @@ class QuizService
         }
 
         $resolvedWeather = $weather ?? $this->resolveWeather($answers);
-        $scored = $this->scoreAll($pool, $answers, $resolvedWeather);
+        $scored = $this->scoreAll($pool, $answers, $resolvedWeather, $user);
 
         return $scored->sortByDesc('score')->first()['restaurant'];
     }
@@ -93,7 +97,7 @@ class QuizService
         }
 
         $resolvedWeather = $weather ?? $this->resolveWeather($answers);
-        $scored = $this->scoreAll($pool, $answers, $resolvedWeather);
+        $scored = $this->scoreAll($pool, $answers, $resolvedWeather, $user);
 
         return $scored->sortByDesc('score')->first()['restaurant'];
     }
@@ -139,10 +143,19 @@ class QuizService
      * @param  Collection<int, Restaurant>  $restaurants
      * @return Collection<int, array{restaurant: Restaurant, score: int}>
      */
-    private function scoreAll(Collection $restaurants, QuizAnswers $answers, ?WeatherData $weather): Collection
+    private function scoreAll(Collection $restaurants, QuizAnswers $answers, ?WeatherData $weather, User $user): Collection
     {
-        return $restaurants->map(function (Restaurant $r) use ($answers, $weather): array {
+        $partnerTags = $this->resolvePartnerPreferredTags($user);
+
+        return $restaurants->map(function (Restaurant $r) use ($answers, $weather, $partnerTags): array {
             $score = 100;
+
+            // Partner turn bias.
+            if (! empty($partnerTags)) {
+                if (! empty(array_intersect($partnerTags, $r->vibe_tags ?? []))) {
+                    $score += self::PARTNER_PREF_BOOST;
+                }
+            }
 
             // Energy
             if (in_array($answers->energy, $r->vibe_tags ?? [], true)) {
@@ -205,6 +218,18 @@ class QuizService
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * @return list<string>
+     */
+    private function resolvePartnerPreferredTags(User $user): array
+    {
+        if (! HouseholdState::isPartnersTurn($user)) {
+            return [];
+        }
+
+        return $user->partner?->preferred_vibe_tags ?? [];
+    }
 
     private function resolveWeather(QuizAnswers $answers): ?WeatherData
     {

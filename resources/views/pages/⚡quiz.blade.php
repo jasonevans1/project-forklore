@@ -3,6 +3,7 @@
 use App\Enums\ModeUsed;
 use App\Models\Restaurant;
 use App\Models\Visit;
+use App\Models\HouseholdState;
 use App\Services\QuizAnswers;
 use App\Services\QuizService;
 use App\Services\WeatherData;
@@ -115,6 +116,7 @@ new #[Title('Guided Quiz')] class extends Component {
 
         $restaurant->increment('visit_count');
         $restaurant->update(['last_visited_at' => now()]);
+        HouseholdState::recordPick(Auth::user());
 
         Flux::toast(variant: 'success', text: __('Enjoy your meal! 🍽️'));
 
@@ -198,6 +200,18 @@ new #[Title('Guided Quiz')] class extends Component {
     {{-- QUESTIONS — 5-step wizard                                         --}}
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'questions')
+
+        {{-- Turn indicator --}}
+        @php $partner = Auth::user()->partner; @endphp
+        @if ($partner)
+            <p class="px-6 pt-4 text-sm text-neutral-400 dark:text-neutral-500">
+                @if (\App\Models\HouseholdState::isPartnersTurn(Auth::user()))
+                    {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
+                @else
+                    {{ __('Your turn') }}
+                @endif
+            </p>
+        @endif
 
         {{-- Progress indicator --}}
         <div class="flex items-center gap-2 px-6 pt-6">
