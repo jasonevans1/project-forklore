@@ -28,6 +28,8 @@ function textSearchResponse(array $places = []): array
                 'formattedAddress' => '123 Main St, Des Moines, IA',
                 'types' => ['restaurant', 'food'],
                 'rating' => 4.3,
+                'location' => ['latitude' => 41.5868, 'longitude' => -93.6250],
+                'priceLevel' => 'PRICE_LEVEL_MODERATE',
             ],
         ],
     ];
@@ -297,4 +299,203 @@ it('returns null without hitting the API when the google_places key is not confi
 
     expect($result)->toBeNull();
     Http::assertNothingSent();
+});
+
+// ---------------------------------------------------------------------------
+// parsePlaces — lat / lng / price_level
+// ---------------------------------------------------------------------------
+
+it('includes latitude in parsed text search results', function () {
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response(textSearchResponse(), 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('pizza');
+
+    expect($results[0]['lat'])->toBe(41.5868);
+});
+
+it('includes longitude in parsed text search results', function () {
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response(textSearchResponse(), 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('pizza');
+
+    expect($results[0]['lng'])->toBe(-93.6250);
+});
+
+it('includes price_level as an integer in parsed text search results', function () {
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response(textSearchResponse(), 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('pizza');
+
+    expect($results[0]['price_level'])->toBe(2);
+});
+
+it('maps PRICE_LEVEL_INEXPENSIVE to 1', function () {
+    $response = textSearchResponse([[
+        'id' => 'p1',
+        'displayName' => ['text' => 'Cheap Eats'],
+        'formattedAddress' => '1 A St',
+        'types' => ['restaurant'],
+        'rating' => 4.0,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+        'priceLevel' => 'PRICE_LEVEL_INEXPENSIVE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('cheap');
+
+    expect($results[0]['price_level'])->toBe(1);
+});
+
+it('maps PRICE_LEVEL_MODERATE to 2', function () {
+    $response = textSearchResponse([[
+        'id' => 'p2',
+        'displayName' => ['text' => 'Mid Range'],
+        'formattedAddress' => '2 B St',
+        'types' => ['restaurant'],
+        'rating' => 4.0,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+        'priceLevel' => 'PRICE_LEVEL_MODERATE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('mid');
+
+    expect($results[0]['price_level'])->toBe(2);
+});
+
+it('maps PRICE_LEVEL_EXPENSIVE to 3', function () {
+    $response = textSearchResponse([[
+        'id' => 'p3',
+        'displayName' => ['text' => 'Fancy Place'],
+        'formattedAddress' => '3 C St',
+        'types' => ['restaurant'],
+        'rating' => 4.5,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+        'priceLevel' => 'PRICE_LEVEL_EXPENSIVE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('fancy');
+
+    expect($results[0]['price_level'])->toBe(3);
+});
+
+it('maps PRICE_LEVEL_VERY_EXPENSIVE to 4', function () {
+    $response = textSearchResponse([[
+        'id' => 'p4',
+        'displayName' => ['text' => 'Ultra Fine'],
+        'formattedAddress' => '4 D St',
+        'types' => ['restaurant'],
+        'rating' => 4.8,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+        'priceLevel' => 'PRICE_LEVEL_VERY_EXPENSIVE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('ultra');
+
+    expect($results[0]['price_level'])->toBe(4);
+});
+
+it('returns null price_level when priceLevel is absent', function () {
+    $response = textSearchResponse([[
+        'id' => 'p5',
+        'displayName' => ['text' => 'No Price'],
+        'formattedAddress' => '5 E St',
+        'types' => ['restaurant'],
+        'rating' => 3.5,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('no price');
+
+    expect($results[0]['price_level'])->toBeNull();
+});
+
+it('returns null lat and lng when location is absent', function () {
+    $response = textSearchResponse([[
+        'id' => 'p6',
+        'displayName' => ['text' => 'No Location'],
+        'formattedAddress' => '6 F St',
+        'types' => ['restaurant'],
+        'rating' => 3.5,
+        'priceLevel' => 'PRICE_LEVEL_MODERATE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('no location');
+
+    expect($results[0]['lat'])->toBeNull()
+        ->and($results[0]['lng'])->toBeNull();
+});
+
+it('maps PRICE_LEVEL_FREE to null price_level', function () {
+    $response = textSearchResponse([[
+        'id' => 'p7',
+        'displayName' => ['text' => 'Free Place'],
+        'formattedAddress' => '7 G St',
+        'types' => ['restaurant'],
+        'rating' => 3.0,
+        'location' => ['latitude' => 41.0, 'longitude' => -93.0],
+        'priceLevel' => 'PRICE_LEVEL_FREE',
+    ]]);
+
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response($response, 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('free');
+
+    expect($results[0]['price_level'])->toBeNull();
+});
+
+it('still returns id, name, address, types, and rating', function () {
+    Http::fake([
+        'places.googleapis.com/v1/places:searchText*' => Http::response(textSearchResponse(), 200),
+    ]);
+
+    $service = app(PlacesService::class);
+    $results = $service->textSearch('pizza');
+
+    expect($results[0])
+        ->toHaveKey('id', 'place_abc123')
+        ->toHaveKey('name', 'The Rusty Fork')
+        ->toHaveKey('address', '123 Main St, Des Moines, IA')
+        ->toHaveKey('types', ['restaurant', 'food'])
+        ->toHaveKey('rating', 4.3);
 });

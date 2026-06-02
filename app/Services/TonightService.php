@@ -109,6 +109,11 @@ class TonightService
         $eventStart = Carbon::parse("{$today} {$event->start_time}");
         $eventEnd = Carbon::parse("{$today} {$event->end_time}");
 
+        // If end is before start, the event spans midnight — advance end to next day.
+        if ($eventEnd->lt($eventStart)) {
+            $eventEnd->addDay();
+        }
+
         // Event window overlaps [now, cutoff] when it starts before cutoff
         // AND ends at or after now.
         return $eventStart->lte($cutoff) && $eventEnd->gte($now);

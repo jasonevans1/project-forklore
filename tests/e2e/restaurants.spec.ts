@@ -63,8 +63,15 @@ test.describe('restaurant create', () => {
         await expect(page).toHaveTitle(/Add restaurant/);
     });
 
+    test('shows the Search Google tab by default', async ({ page }) => {
+        await page.goto('/restaurants/create');
+        await expect(page.getByPlaceholder(/search restaurants/i)).toBeVisible();
+        await expect(page.getByRole('button', { name: /^search$/i })).toBeVisible();
+    });
+
     test('renders all form fields', async ({ page }) => {
         await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
         await expect(page.getByRole('textbox', { name: 'Name' })).toBeVisible();
         await expect(page.getByRole('textbox', { name: 'Address' })).toBeVisible();
         await expect(page.getByRole('textbox', { name: 'Cuisine tags' })).toBeVisible();
@@ -83,11 +90,13 @@ test.describe('restaurant create', () => {
 
     test('submit button is visible', async ({ page }) => {
         await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
         await expect(page.getByRole('button', { name: 'Add restaurant' })).toBeVisible();
     });
 
     test('shows validation errors when submitting without required fields', async ({ page }) => {
         await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
         await page.getByRole('button', { name: 'Add restaurant' }).click();
         // Name is required — Flux renders its error inside the input group
         await expect(page.getByText(/required/i).first()).toBeVisible();
@@ -98,6 +107,7 @@ test.describe('restaurant create', () => {
         const name = `E2E Create Test ${Date.now()}`;
 
         await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
 
         await page.getByRole('textbox', { name: 'Name' }).fill(name);
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('French, Bistro');
@@ -274,12 +284,20 @@ test.describe('restaurant delete', () => {
         const name = `E2E Delete Target ${Date.now()}`;
 
         await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
         await page.getByRole('textbox', { name: 'Name' }).fill(name);
         await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('Test');
         await page.getByRole('button', { name: 'casual' }).click();
         await expect(page.getByRole('button', { name: 'casual' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('button', { name: 'Add restaurant' }).click();
         await expect(page).toHaveURL(/\/restaurants$/);
+
+        // Clear the persisted Flux toast from localStorage so it doesn't overlay subsequent clicks
+        await page.evaluate(() => {
+            Object.keys(localStorage)
+                .filter((k) => k.toLowerCase().includes('toast'))
+                .forEach((k) => localStorage.removeItem(k));
+        });
 
         await page.getByRole('link', { name }).click();
         await page.getByRole('button', { name: 'Delete' }).first().click();

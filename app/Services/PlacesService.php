@@ -41,7 +41,7 @@ class PlacesService
         try {
             $response = Http::withHeaders([
                 'X-Goog-Api-Key' => $this->apiKey(),
-                'X-Goog-FieldMask' => 'places.id,places.displayName,places.formattedAddress,places.types,places.rating',
+                'X-Goog-FieldMask' => 'places.id,places.displayName,places.formattedAddress,places.types,places.rating,places.location,places.priceLevel',
             ])->post(self::BASE_URL.':searchText', [
                 'textQuery' => $query,
             ]);
@@ -256,6 +256,22 @@ class PlacesService
     // ---------------------------------------------------------------------------
 
     /**
+     * Map a Google Places priceLevel string to an integer 1–4, or null.
+     *
+     * @param  string|null  $priceLevel  e.g. 'PRICE_LEVEL_MODERATE'
+     */
+    private function parsePriceLevel(?string $priceLevel): ?int
+    {
+        return match ($priceLevel) {
+            'PRICE_LEVEL_INEXPENSIVE' => 1,
+            'PRICE_LEVEL_MODERATE' => 2,
+            'PRICE_LEVEL_EXPENSIVE' => 3,
+            'PRICE_LEVEL_VERY_EXPENSIVE' => 4,
+            default => null,
+        };
+    }
+
+    /**
      * @param  array<string, mixed>  $raw
      * @return array<int, array<string, mixed>>
      */
@@ -268,6 +284,9 @@ class PlacesService
                 'address' => $place['formattedAddress'] ?? null,
                 'types' => $place['types'] ?? [],
                 'rating' => $place['rating'] ?? null,
+                'lat' => $place['location']['latitude'] ?? null,
+                'lng' => $place['location']['longitude'] ?? null,
+                'price_level' => $this->parsePriceLevel($place['priceLevel'] ?? null),
             ],
             $raw['places'] ?? []
         );

@@ -11,9 +11,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    // Freeze at noon to prevent now+1h / now+3h from crossing midnight in CI
+    Carbon::setTestNow('2026-06-02 12:00:00');
     $this->user = User::factory()->create();
     $this->service = new TonightService;
     $this->now = Carbon::now();
+});
+
+afterEach(function () {
+    Carbon::setTestNow(null);
 });
 
 // ---------------------------------------------------------------------------
