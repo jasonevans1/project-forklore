@@ -10,6 +10,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('tonight', 'pages::tonight')->name('tonight');
     Route::livewire('quiz', 'pages::quiz')->name('quiz');
     Route::livewire('tournament', 'pages::tournament')->name('tournament');
+    Route::livewire('history', 'pages::history')->name('history');
 });
 
 require __DIR__.'/settings.php';
