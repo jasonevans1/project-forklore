@@ -2,7 +2,10 @@
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,4 +78,44 @@ it('generates an address string', function () {
 
     expect($restaurant->address)->toBeString()->not->toBeEmpty()
         ->toContain('Des Moines, IA');
+});
+
+it('generates a valid service_level for factory restaurants', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->service_level)->toBeInstanceOf(ServiceLevel::class);
+});
+
+it('generates a non-empty array of valid service options for factory restaurants', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->service_options)->toBeArray()->not->toBeEmpty();
+
+    foreach ($restaurant->service_options as $option) {
+        expect(ServiceOption::tryFrom($option))->not->toBeNull();
+    }
+});
+
+it('generates a valid primary_cuisine for factory restaurants', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    expect($restaurant->primary_cuisine)->toBeInstanceOf(PrimaryCuisine::class);
+});
+
+it('never generates drive_thru for fine dining or upscale casual restaurants', function () {
+    foreach ([ServiceLevel::FineDining, ServiceLevel::UpscaleCasual] as $serviceLevel) {
+        $restaurants = Restaurant::factory()->count(20)->withServiceLevel($serviceLevel)->make();
+
+        foreach ($restaurants as $restaurant) {
+            expect($restaurant->service_options)->not->toContain(ServiceOption::DriveThru->value);
+        }
+    }
+});
+
+it('always includes dine_in for fine dining restaurants', function () {
+    $restaurants = Restaurant::factory()->count(20)->withServiceLevel(ServiceLevel::FineDining)->make();
+
+    foreach ($restaurants as $restaurant) {
+        expect($restaurant->service_options)->toContain(ServiceOption::DineIn->value);
+    }
 });

@@ -4,7 +4,10 @@ namespace Database\Seeders;
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -32,6 +35,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::Decent,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::Casual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value, ServiceOption::Delivery->value],
+                'primary_cuisine' => PrimaryCuisine::Pizza,
             ],
             [
                 'name' => 'Exile Brewing Co',
@@ -42,6 +48,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::Decent,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::Casual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::American,
             ],
             [
                 'name' => 'Centro',
@@ -52,6 +61,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Cozy,
+                'service_level' => ServiceLevel::UpscaleCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::Italian,
             ],
             [
                 'name' => 'Zombie Burger',
@@ -62,6 +74,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::FastCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value, ServiceOption::Delivery->value],
+                'primary_cuisine' => PrimaryCuisine::American,
             ],
             [
                 'name' => 'Django',
@@ -72,6 +87,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Cozy,
+                'service_level' => ServiceLevel::UpscaleCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::Other,
             ],
             [
                 'name' => 'Proof',
@@ -82,6 +100,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::Destination,
                 'indoor_vibe_when_cold' => IndoorVibe::Cozy,
+                'service_level' => ServiceLevel::FineDining,
+                'service_options' => [ServiceOption::DineIn->value],
+                'primary_cuisine' => PrimaryCuisine::Mediterranean,
             ],
             [
                 'name' => 'ARC Restaurant',
@@ -92,6 +113,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::Decent,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::UpscaleCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::American,
             ],
             [
                 'name' => 'El Bait Shop',
@@ -102,6 +126,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::Decent,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::Casual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::BarFood,
             ],
             [
                 'name' => "Zanzibar's Coffee Adventure",
@@ -112,6 +139,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Cozy,
+                'service_level' => ServiceLevel::FastCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::Cafe,
             ],
             [
                 'name' => 'Eatery A',
@@ -122,6 +152,9 @@ class RestaurantSeeder extends Seeder
                 'source' => RestaurantSource::Favorite,
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
+                'service_level' => ServiceLevel::UpscaleCasual,
+                'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+                'primary_cuisine' => PrimaryCuisine::AsianGeneral,
             ],
         ];
 

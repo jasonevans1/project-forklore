@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
 use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +31,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'avg_duration_minutes',
     'last_visited_at',
     'visit_count',
+    'service_level',
+    'service_options',
+    'primary_cuisine',
 ])]
 class Restaurant extends Model
 {
@@ -49,6 +54,9 @@ class Restaurant extends Model
             'patio_quality' => PatioQuality::class,
             'indoor_vibe_when_cold' => IndoorVibe::class,
             'last_visited_at' => 'datetime',
+            'service_level' => ServiceLevel::class,
+            'service_options' => 'array',
+            'primary_cuisine' => PrimaryCuisine::class,
         ];
     }
 

@@ -2,7 +2,10 @@
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Livewire\Livewire;
@@ -211,6 +214,148 @@ it('saves a restaurant with valid vibe tags selected from the taxonomy', functio
     $restaurant = Restaurant::where('name', 'Taxonomy Place')->first();
 
     expect($restaurant->vibe_tags)->toBe(['casual', 'lively']);
+});
+
+it('saves service_level when creating a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Service Level Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('service_level', ServiceLevel::Casual->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('restaurants', [
+        'name' => 'Service Level Place',
+        'service_level' => ServiceLevel::Casual->value,
+    ]);
+});
+
+it('saves service_options when creating a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Service Options Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('service_options', [ServiceOption::DineIn->value, ServiceOption::Takeout->value])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $restaurant = Restaurant::where('name', 'Service Options Place')->first();
+
+    expect($restaurant->service_options)->toEqualCanonicalizing([
+        ServiceOption::DineIn->value,
+        ServiceOption::Takeout->value,
+    ]);
+});
+
+it('saves primary_cuisine when creating a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Primary Cuisine Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('primary_cuisine', PrimaryCuisine::Italian->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('restaurants', [
+        'name' => 'Primary Cuisine Place',
+        'primary_cuisine' => PrimaryCuisine::Italian->value,
+    ]);
+});
+
+it('creates a restaurant with the classification fields omitted', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Omitted Classification Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $restaurant = Restaurant::where('name', 'Omitted Classification Place')->first();
+
+    expect($restaurant->service_level)->toBeNull()
+        ->and($restaurant->service_options)->toBeNull()
+        ->and($restaurant->primary_cuisine)->toBeNull();
+});
+
+it('creates a restaurant when the classification selects are explicitly blank', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Blank Classification Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('service_level', '')
+        ->set('primary_cuisine', '')
+        ->set('service_options', [])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $restaurant = Restaurant::where('name', 'Blank Classification Place')->first();
+
+    expect($restaurant->service_level)->toBeNull()
+        ->and($restaurant->service_options)->toBeNull()
+        ->and($restaurant->primary_cuisine)->toBeNull();
+});
+
+it('rejects an invalid service_level value', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Invalid Service Level Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('service_level', 'not_real')
+        ->call('save')
+        ->assertHasErrors(['service_level']);
+});
+
+it('rejects an invalid service option value in the array', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Invalid Service Option Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('service_options', ['not_a_real_option'])
+        ->call('save')
+        ->assertHasErrors(['service_options.*']);
+});
+
+it('rejects an invalid primary_cuisine value', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Invalid Primary Cuisine Place')
+        ->set('cuisine_tags', 'Italian')
+        ->set('vibe_tags', ['casual'])
+        ->set('primary_cuisine', 'not_real')
+        ->call('save')
+        ->assertHasErrors(['primary_cuisine']);
 });
 
 it('does not expose the source field as user input', function () {

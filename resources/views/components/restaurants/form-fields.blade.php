@@ -1,6 +1,9 @@
 @php
     use App\Enums\IndoorVibe;
     use App\Enums\PatioQuality;
+    use App\Enums\PrimaryCuisine;
+    use App\Enums\ServiceLevel;
+    use App\Enums\ServiceOption;
 @endphp
 
 {{-- Name --}}
@@ -69,3 +72,26 @@
     min="1"
     max="600"
 />
+
+{{-- Service Level --}}
+<flux:select wire:model="service_level" :label="__('Service level')">
+    <flux:select.option value="">{{ __('— Select —') }}</flux:select.option>
+    @foreach (ServiceLevel::cases() as $case)
+        <flux:select.option value="{{ $case->value }}">{{ $case->label() }}</flux:select.option>
+    @endforeach
+</flux:select>
+
+{{-- Primary Cuisine --}}
+<flux:select wire:model="primary_cuisine" :label="__('Primary cuisine')">
+    <flux:select.option value="">{{ __('— Select —') }}</flux:select.option>
+    @foreach (PrimaryCuisine::cases() as $case)
+        <flux:select.option value="{{ $case->value }}">{{ $case->label() }}</flux:select.option>
+    @endforeach
+</flux:select>
+
+{{-- Service Options --}}
+<flux:checkbox.group wire:model="service_options" :label="__('Service options')">
+    @foreach (ServiceOption::cases() as $case)
+        <flux:checkbox value="{{ $case->value }}" label="{{ $case->label() }}" />
+    @endforeach
+</flux:checkbox.group>
