@@ -57,6 +57,23 @@ async function completeQuiz(
     await step;
 }
 
+/**
+ * Reset the quiz wizard to a clean step 1, regardless of which state
+ * (questions/result/empty) a previous test left it in. The result state has
+ * no "Start over" control in the UI (by design), and rejecting repeatedly via
+ * "Not this one" isn't guaranteed to terminate (it can oscillate between the
+ * same two restaurants) — so this calls the component's `restart` action
+ * directly via Livewire's JS API instead of depending on which button is
+ * visible.
+ */
+async function resetQuizState(page: Page) {
+    await page.goto('/quiz');
+
+    const reset = waitForLivewire(page);
+    await page.evaluate(() => (window as any).Livewire.first().call('restart'));
+    await reset;
+}
+
 // ── Unauthenticated guard ─────────────────────────────────────────────────────
 
 test('unauthenticated user is redirected to login from /quiz', async ({ page }) => {
@@ -68,6 +85,19 @@ test('unauthenticated user is redirected to login from /quiz', async ({ page }) 
 
 test.describe('guided quiz', () => {
     test.use({ storageState: 'tests/e2e/.auth/user.json' });
+
+    // All quiz tests share one authenticated session cookie, and the wizard
+    // now persists its step/state server-side (`quiz.wizard`). That state is
+    // keyed by session, not by browser context, so fullyParallel workers
+    // sharing this storageState would race on the same server-side session —
+    // force this describe block to run serially, then reset via the existing
+    // Start over control before every test so a prior test that ended
+    // mid-quiz can't leak state into this one.
+    test.describe.configure({ mode: 'serial' });
+
+    test.beforeEach(async ({ page }) => {
+        await resetQuizState(page);
+    });
 
     // ── Page shell ────────────────────────────────────────────────────────────
 
@@ -430,6 +460,13 @@ test.describe('guided quiz', () => {
 
 test.describe('guided quiz — mobile', () => {
     test.use({ storageState: 'tests/e2e/.auth/user.json' });
+
+    // Same shared-session concern as the desktop describe block above.
+    test.describe.configure({ mode: 'serial' });
+
+    test.beforeEach(async ({ page }) => {
+        await resetQuizState(page);
+    });
 
     test('answer buttons are tall enough to be thumb-friendly (≥ 64 px)', async ({ page }) => {
         await page.goto('/quiz');

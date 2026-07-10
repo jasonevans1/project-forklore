@@ -328,3 +328,236 @@ it('resets to step 1 when the user starts over from the empty state', function (
         ->assertSet('step', 1)
         ->assertSet('state', 'questions');
 });
+
+it('shows a start-over action in the header during the questions state', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSeeHtml('wire:click="restart"');
+});
+
+it('resets to step 1 when start-over is triggered mid-quiz', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('restart')
+        ->assertSet('step', 1)
+        ->assertSet('state', 'questions');
+});
+
+it('clears previously given answers when start-over is triggered mid-quiz', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('restart')
+        ->assertSet('energy', null)
+        ->assertSet('hunger', null);
+});
+
+it('clears the persisted session state when start-over is triggered', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('restart');
+
+    expect(session('quiz.wizard'))->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// Back navigation
+// ---------------------------------------------------------------------------
+
+it('returns to the previous step when back is tapped', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('back')
+        ->assertSet('step', 2);
+});
+
+it('skips reserved placeholder slots when navigating back', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->set('step', 7)
+        ->call('back')
+        ->assertSet('step', 5);
+});
+
+it('does not render a back button on the first effective step', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertDontSee('Back');
+});
+
+it('renders a back button on steps after the first', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->assertSee('Back');
+});
+
+it('persists the updated step to session after navigating back', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('back');
+
+    expect(session('quiz.wizard.step'))->toBe(2);
+});
+
+it('retains a previously given answer after navigating back then forward again', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('back')
+        ->assertSet('hunger', 'moderate')
+        ->call('answer', 'hunger', 'moderate')
+        ->assertSet('step', 3);
+});
+
+// ---------------------------------------------------------------------------
+// Step registry / effective-count helpers
+// ---------------------------------------------------------------------------
+
+it('reports effective step number 1 for raw step 1', function () {
+    $component = Livewire::actingAs($this->user)->test('pages::quiz');
+
+    expect($component->instance()->effectiveStepNumber(1))->toBe(1);
+});
+
+it('reports effective step total of 5 given the current registry', function () {
+    $component = Livewire::actingAs($this->user)->test('pages::quiz');
+
+    expect($component->instance()->effectiveStepTotal())->toBe(5);
+});
+
+it('advances from raw step 5 to resolving the result instead of a raw step 6 or 7', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('answer', 'familiarity', 'either')
+        ->call('answer', 'distance', 'anywhere')
+        ->call('answer', 'cuisine', null)
+        ->assertSet('state', 'result')
+        ->assertSet('step', 5);
+});
+
+// ---------------------------------------------------------------------------
+// Session persistence
+// ---------------------------------------------------------------------------
+
+it('restores previously answered fields from session when the component remounts', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate');
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSet('energy', 'lively')
+        ->assertSet('hunger', 'moderate');
+});
+
+it('restores the current step from session when the component remounts', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate');
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSet('step', 3);
+});
+
+it('persists each answer to session immediately after answering', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively');
+
+    expect(session('quiz.wizard.step'))->toBe(2);
+});
+
+it('does not restore any state when no session data exists yet', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSet('step', 1)
+        ->assertSet('energy', null);
+});
+
+it('clears the session when the quiz is completed via going', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('answer', 'familiarity', 'either')
+        ->call('answer', 'distance', 'anywhere')
+        ->call('answer', 'cuisine', null)
+        ->call('going');
+
+    expect(session('quiz.wizard'))->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// Question partial extraction
+// ---------------------------------------------------------------------------
+
+it('renders the energy question from its own partial on step 1', function () {
+    expect(view()->exists('components.quiz.steps.energy'))->toBeTrue();
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSee("What's your energy tonight?");
+});
+
+it('renders the cuisine question from its own partial on the last effective step', function () {
+    expect(view()->exists('components.quiz.steps.cuisine'))->toBeTrue();
+
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->call('answer', 'energy', 'lively')
+        ->call('answer', 'hunger', 'moderate')
+        ->call('answer', 'familiarity', 'either')
+        ->call('answer', 'distance', 'anywhere')
+        ->assertSee('Any cuisine in mind?');
+});
+
+it('displays step and total counts derived from the effective step total, not a hardcoded number', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->set('step', 7)
+        ->assertSee('Step 5 of 5')
+        ->assertDontSee('Step 7 of 5');
+});
+
+it('still shows all 5 question option buttons with unchanged copy after extraction', function () {
+    Livewire::actingAs($this->user)
+        ->test('pages::quiz')
+        ->assertSeeHtml("wire:click=\"answer('energy', 'lively')\"")
+        ->assertSee('🎉 Lively')
+        ->call('answer', 'energy', 'moderate')
+        ->assertSeeHtml("wire:click=\"answer('hunger', 'light')\"")
+        ->assertSee('🥗 Light bite')
+        ->call('answer', 'hunger', 'moderate')
+        ->assertSeeHtml("wire:click=\"answer('familiarity', 'new')\"")
+        ->assertSee('🗺️ Something new')
+        ->call('answer', 'familiarity', 'either')
+        ->assertSeeHtml("wire:click=\"answer('distance', 'nearby')\"")
+        ->assertSee('📍 Nearby')
+        ->call('answer', 'distance', 'anywhere')
+        ->assertSeeHtml("wire:click=\"answer('cuisine', 'Italian')\"")
+        ->assertSee('Italian');
+});
