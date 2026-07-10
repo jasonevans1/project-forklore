@@ -37,6 +37,27 @@ new #[Title('Guided Quiz')] class extends Component {
     /** User longitude — set by Alpine via Geolocation API. */
     public ?float $lng = null;
 
+    /** Session key under which wizard progress is persisted. */
+    private const SESSION_KEY = 'quiz.wizard';
+
+    public function mount(): void
+    {
+        $snapshot = session(self::SESSION_KEY);
+
+        if ($snapshot === null) {
+            return;
+        }
+
+        $this->step = $snapshot['step'];
+        $this->state = $snapshot['state'];
+        $this->restaurantId = $snapshot['restaurantId'];
+        $this->energy = $snapshot['energy'];
+        $this->hunger = $snapshot['hunger'];
+        $this->familiarity = $snapshot['familiarity'];
+        $this->distance = $snapshot['distance'];
+        $this->cuisine = $snapshot['cuisine'];
+    }
+
     // -------------------------------------------------------------------------
     // Computed
     // -------------------------------------------------------------------------
@@ -53,20 +74,21 @@ new #[Title('Guided Quiz')] class extends Component {
 
     /**
      * Store the answer for the current step and advance — resolving the result
-     * on step 5.
+     * once no non-skipped steps remain.
      */
     public function answer(string $field, mixed $value): void
     {
         $this->{$field} = $value;
 
-        if ($this->step < 5) {
-            $this->step++;
+        $next = $this->nextRawStep($this->step);
 
-            return;
+        if ($next === null) {
+            $this->resolve();
+        } else {
+            $this->step = $next;
         }
 
-        // All 5 answers collected — run the quiz.
-        $this->resolve();
+        $this->persistSession();
     }
 
     /**
@@ -120,7 +142,26 @@ new #[Title('Guided Quiz')] class extends Component {
 
         Flux::toast(variant: 'success', text: __('Enjoy your meal! 🍽️'));
 
+        $this->clearSession();
+
         $this->redirect(route('dashboard'), navigate: true);
+    }
+
+    /**
+     * Return to the previous non-skipped step. No-op if already on the
+     * first effective step.
+     */
+    public function back(): void
+    {
+        $previous = $this->previousRawStep($this->step);
+
+        if ($previous === null) {
+            return;
+        }
+
+        $this->step = $previous;
+
+        $this->persistSession();
     }
 
     /**
@@ -136,6 +177,113 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->familiarity = null;
         $this->distance = null;
         $this->cuisine = null;
+
+        $this->clearSession();
+    }
+
+    // -------------------------------------------------------------------------
+    // Step registry / effective-count helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * The current step's field name, or null if reserved/skipped.
+     */
+    public function currentField(): ?string
+    {
+        return $this->steps()[$this->step]['field'];
+    }
+
+    /**
+     * Whether there is a previous non-skipped step to go back to.
+     */
+    public function canGoBack(): bool
+    {
+        return $this->previousRawStep($this->step) !== null;
+    }
+
+    /**
+     * Translate a raw step number into its effective "Step X of Y" count —
+     * the number of non-skipped slots at or before the given raw step.
+     */
+    public function effectiveStepNumber(int $rawStep): int
+    {
+        return collect($this->steps())
+            ->filter(fn (array $slot, int $key): bool => ! $slot['skip'] && $key <= $rawStep)
+            ->count();
+    }
+
+    /**
+     * Total number of non-skipped slots in the registry.
+     */
+    public function effectiveStepTotal(): int
+    {
+        return collect($this->steps())->where('skip', false)->count();
+    }
+
+    /**
+     * The next non-skipped raw step after the given one, or null if none
+     * remain (signals the quiz should resolve now).
+     */
+    private function nextRawStep(int $from): ?int
+    {
+        return collect($this->steps())
+            ->filter(fn (array $slot, int $key): bool => $key > $from && ! $slot['skip'])
+            ->keys()
+            ->first();
+    }
+
+    /**
+     * The previous non-skipped raw step before the given one, or null if
+     * $from is already the first non-skipped slot.
+     */
+    private function previousRawStep(int $from): ?int
+    {
+        return collect($this->steps())
+            ->filter(fn (array $slot, int $key): bool => $key < $from && ! $slot['skip'])
+            ->keys()
+            ->last();
+    }
+
+    /**
+     * Fixed 7-slot step registry: 5 real question slots plus 2 reserved,
+     * always-skipped placeholders.
+     *
+     * @return array<int, array{field: string|null, skip: bool}>
+     */
+    private function steps(): array
+    {
+        return [
+            1 => ['field' => 'energy', 'skip' => false],
+            2 => ['field' => 'hunger', 'skip' => false],
+            3 => ['field' => 'familiarity', 'skip' => false],
+            4 => ['field' => 'distance', 'skip' => false],
+            5 => ['field' => 'cuisine', 'skip' => false],
+            6 => ['field' => null, 'skip' => true], // ponytail: reserved slot, real question TBD
+            7 => ['field' => null, 'skip' => true], // ponytail: reserved slot, real question TBD
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+    // Session persistence
+    // -------------------------------------------------------------------------
+
+    private function persistSession(): void
+    {
+        session([self::SESSION_KEY => [
+            'step' => $this->step,
+            'state' => $this->state,
+            'restaurantId' => $this->restaurantId,
+            'energy' => $this->energy,
+            'hunger' => $this->hunger,
+            'familiarity' => $this->familiarity,
+            'distance' => $this->distance,
+            'cuisine' => $this->cuisine,
+        ]]);
+    }
+
+    private function clearSession(): void
+    {
+        session()->forget(self::SESSION_KEY);
     }
 
     // -------------------------------------------------------------------------
@@ -201,146 +349,50 @@ new #[Title('Guided Quiz')] class extends Component {
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'questions')
 
-        {{-- Turn indicator --}}
+        {{-- Header: turn indicator + start-over action --}}
         @php $partner = Auth::user()->partner; @endphp
-        @if ($partner)
-            <p class="px-6 pt-4 text-sm text-neutral-400 dark:text-neutral-500">
-                @if (\App\Models\HouseholdState::isPartnersTurn(Auth::user()))
-                    {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
-                @else
-                    {{ __('Your turn') }}
-                @endif
-            </p>
-        @endif
+        <div class="flex items-center justify-between px-6 pt-4">
+            @if ($partner)
+                <p class="text-sm text-neutral-400 dark:text-neutral-500">
+                    @if (\App\Models\HouseholdState::isPartnersTurn(Auth::user()))
+                        {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
+                    @else
+                        {{ __('Your turn') }}
+                    @endif
+                </p>
+            @else
+                <span></span>
+            @endif
+
+            <flux:button size="sm" variant="ghost" wire:click="restart">
+                {{ __('Start over') }}
+            </flux:button>
+        </div>
 
         {{-- Progress indicator --}}
         <div class="flex items-center gap-2 px-6 pt-6">
-            @foreach (range(1, 5) as $i)
-                <div class="h-1.5 flex-1 rounded-full {{ $i <= $step ? 'bg-zinc-800 dark:bg-zinc-100' : 'bg-zinc-200 dark:bg-zinc-700' }}"></div>
+            @foreach (range(1, $this->effectiveStepTotal()) as $i)
+                <div class="h-1.5 flex-1 rounded-full {{ $i <= $this->effectiveStepNumber($step) ? 'bg-zinc-800 dark:bg-zinc-100' : 'bg-zinc-200 dark:bg-zinc-700' }}"></div>
             @endforeach
         </div>
-        <p class="px-6 pt-2 text-xs text-neutral-400">{{ __('Step :step of 5', ['step' => $step]) }}</p>
+        <p class="px-6 pt-2 text-xs text-neutral-400">{{ __('Step :step of :total', ['step' => $this->effectiveStepNumber($step), 'total' => $this->effectiveStepTotal()]) }}</p>
 
         <div class="flex flex-1 flex-col justify-center gap-6 px-6 pb-16 pt-8">
-
-            {{-- Step 1 — energy level --}}
-            @if ($step === 1)
-                <flux:heading size="xl" class="text-2xl font-bold">
-                    {{ __("What's your energy tonight?") }}
-                </flux:heading>
-                <p class="text-sm text-neutral-500">{{ __('energy') }}</p>
-                <div class="flex flex-col gap-3">
-                    @foreach ([
-                        ['value' => 'lively', 'label' => '🎉 Lively', 'sub' => 'Busy, loud, fun'],
-                        ['value' => 'moderate', 'label' => '😊 Moderate', 'sub' => 'Relaxed but social'],
-                        ['value' => 'quiet', 'label' => '🤫 Quiet', 'sub' => 'Low-key, easy conversation'],
-                    ] as $opt)
-                        <button
-                            wire:click="answer('energy', '{{ $opt['value'] }}')"
-                            class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
-                        >
-                            <span class="text-lg font-semibold">{{ $opt['label'] }}</span>
-                            <span class="text-sm text-neutral-500">{{ $opt['sub'] }}</span>
-                        </button>
-                    @endforeach
-                </div>
+            @if ($this->currentField())
+                <x-dynamic-component :component="'quiz.steps.' . $this->currentField()" />
             @endif
-
-            {{-- Step 2 — hunger level --}}
-            @if ($step === 2)
-                <flux:heading size="xl" class="text-2xl font-bold">
-                    {{ __('How hungry are you?') }}
-                </flux:heading>
-                <p class="text-sm text-neutral-500">{{ __('hunger') }}</p>
-                <div class="flex flex-col gap-3">
-                    @foreach ([
-                        ['value' => 'light', 'label' => '🥗 Light bite', 'sub' => 'Snack or small plates'],
-                        ['value' => 'moderate', 'label' => '🍝 Moderate', 'sub' => 'A solid meal'],
-                        ['value' => 'hungry', 'label' => '🥩 Very hungry', 'sub' => 'Big portions, hearty food'],
-                    ] as $opt)
-                        <button
-                            wire:click="answer('hunger', '{{ $opt['value'] }}')"
-                            class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
-                        >
-                            <span class="text-lg font-semibold">{{ $opt['label'] }}</span>
-                            <span class="text-sm text-neutral-500">{{ $opt['sub'] }}</span>
-                        </button>
-                    @endforeach
-                </div>
-            @endif
-
-            {{-- Step 3 — new vs familiar --}}
-            @if ($step === 3)
-                <flux:heading size="xl" class="text-2xl font-bold">
-                    {{ __('Something new or a familiar spot?') }}
-                </flux:heading>
-                <p class="text-sm text-neutral-500">{{ __('familiar') }}</p>
-                <div class="flex flex-col gap-3">
-                    @foreach ([
-                        ['value' => 'new', 'label' => '🗺️ Something new', 'sub' => 'A place you haven\'t tried lately'],
-                        ['value' => 'familiar', 'label' => '🏠 A favorite', 'sub' => 'Somewhere you love and trust'],
-                        ['value' => 'either', 'label' => '🤷 Either', 'sub' => 'Surprise me'],
-                    ] as $opt)
-                        <button
-                            wire:click="answer('familiarity', '{{ $opt['value'] }}')"
-                            class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
-                        >
-                            <span class="text-lg font-semibold">{{ $opt['label'] }}</span>
-                            <span class="text-sm text-neutral-500">{{ $opt['sub'] }}</span>
-                        </button>
-                    @endforeach
-                </div>
-            @endif
-
-            {{-- Step 4 — max distance --}}
-            @if ($step === 4)
-                <flux:heading size="xl" class="text-2xl font-bold">
-                    {{ __('How far are you willing to go?') }}
-                </flux:heading>
-                <p class="text-sm text-neutral-500">{{ __('distance') }}</p>
-                <div class="flex flex-col gap-3">
-                    @foreach ([
-                        ['value' => 'nearby', 'label' => '📍 Nearby', 'sub' => 'Under 2 miles'],
-                        ['value' => 'close', 'label' => '🚗 Close', 'sub' => 'Under 5 miles'],
-                        ['value' => 'anywhere', 'label' => '🌍 Anywhere', 'sub' => 'Distance doesn\'t matter'],
-                    ] as $opt)
-                        <button
-                            wire:click="answer('distance', '{{ $opt['value'] }}')"
-                            class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
-                        >
-                            <span class="text-lg font-semibold">{{ $opt['label'] }}</span>
-                            <span class="text-sm text-neutral-500">{{ $opt['sub'] }}</span>
-                        </button>
-                    @endforeach
-                </div>
-            @endif
-
-            {{-- Step 5 — cuisine preference --}}
-            @if ($step === 5)
-                <flux:heading size="xl" class="text-2xl font-bold">
-                    {{ __('Any cuisine in mind?') }}
-                </flux:heading>
-                <p class="text-sm text-neutral-500">{{ __('cuisine') }}</p>
-                <div class="flex flex-col gap-3">
-                    <button
-                        wire:click="answer('cuisine', null)"
-                        class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
-                    >
-                        <span class="text-lg font-semibold">🎲 {{ __('Surprise me') }}</span>
-                        <span class="text-sm text-neutral-500">{{ __('Pick the best match regardless of cuisine') }}</span>
-                    </button>
-                    @foreach (['Italian', 'Mexican', 'American', 'Thai', 'Japanese', 'Indian', 'Chinese', 'Mediterranean'] as $cuisine)
-                        <button
-                            wire:click="answer('cuisine', '{{ $cuisine }}')"
-                            class="rounded-2xl border border-zinc-200 p-5 text-left text-lg font-semibold dark:border-zinc-700"
-                        >
-                            {{ $cuisine }}
-                        </button>
-                    @endforeach
-                </div>
-            @endif
-
         </div>
+
+        @if ($this->canGoBack())
+            <div class="px-6 pb-12 pt-6">
+                <flux:button
+                    class="w-full py-4 text-base"
+                    wire:click="back"
+                >
+                    {{ __('Back') }}
+                </flux:button>
+            </div>
+        @endif
     @endif
 
     {{-- ---------------------------------------------------------------- --}}
