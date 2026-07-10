@@ -2,6 +2,14 @@
 
 A mobile-first Laravel app that ends the "I don't know, what do you want?" conversation. Built for couples — every flow resolves to **one restaurant**, never a list.
 
+## Feature Development
+
+For any feature or change beyond a simple fix, use the `hcf:plan-create` skill to trigger the autonomous development workflow. Never use Claude Code's built-in plan mode. After writing a plan, ask the user if they want to execute it, and provide the command to run it later with the `hcf:plan-orchestrate` skill.
+
+Use this workflow for: new features, multi-file changes, anything requiring multiple steps or tests.
+
+Skip for: quick bug fixes, single-line changes, questions, documentation. When skipped, still ensure appropriate tests exist for any added functionality.
+
 ## Four Decision Modes
 - **Quick Pick** — One tap. Weather-aware, time-aware, skips recently visited places.
 - **Something Happening Tonight** — Filters to restaurants with live events starting soon.
@@ -273,7 +281,6 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run Artisan commands directly via the command line (e.g., `php artisan route:list`). Use `php artisan list` to discover available commands and `php artisan [command] --help` to check parameters.
 - Inspect routes with `php artisan route:list`. Filter with: `--method=GET`, `--name=users`, `--path=api`, `--except-vendor`, `--only-vendor`.
 - Read configuration values using dot notation: `php artisan config:show app.name`, `php artisan config:show database.default`. Or read config files directly from the `config/` directory.
-- To check environment variables, read the `.env` file directly.
 
 ## Tinker
 
