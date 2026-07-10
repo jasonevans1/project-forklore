@@ -2,7 +2,10 @@
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Services\PlacesService;
 use Flux\Flux;
@@ -34,6 +37,12 @@ new #[Title('Add restaurant')] class extends Component {
     public string $indoor_vibe_when_cold = IndoorVibe::Neutral->value;
 
     public ?int $avg_duration_minutes = null;
+
+    public ?string $service_level = null;
+
+    public array $service_options = [];
+
+    public ?string $primary_cuisine = null;
 
     public ?float $lat = null;
 
@@ -88,6 +97,10 @@ new #[Title('Add restaurant')] class extends Component {
             'patio_quality' => ['required', Rule::enum(PatioQuality::class)],
             'indoor_vibe_when_cold' => ['required', Rule::enum(IndoorVibe::class)],
             'avg_duration_minutes' => ['nullable', 'integer', 'min:1', 'max:600'],
+            'service_level' => ['nullable', Rule::enum(ServiceLevel::class)],
+            'service_options' => ['nullable', 'array'],
+            'service_options.*' => [Rule::enum(ServiceOption::class)],
+            'primary_cuisine' => ['nullable', Rule::enum(PrimaryCuisine::class)],
             'lat' => ['nullable', 'numeric'],
             'lng' => ['nullable', 'numeric'],
             'places_id' => ['nullable', 'string', 'max:255'],
@@ -118,6 +131,9 @@ new #[Title('Add restaurant')] class extends Component {
             'patio_quality' => $this->patio_quality,
             'indoor_vibe_when_cold' => $this->indoor_vibe_when_cold,
             'avg_duration_minutes' => $this->avg_duration_minutes,
+            'service_level' => $this->service_level ?: null,
+            'service_options' => $this->service_options ?: null,
+            'primary_cuisine' => $this->primary_cuisine ?: null,
             'source' => RestaurantSource::Favorite,
             'lat' => $this->lat,
             'lng' => $this->lng,

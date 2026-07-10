@@ -2,7 +2,10 @@
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Livewire\Livewire;
@@ -266,6 +269,120 @@ it('forbids a non-owner from invoking save via the edit page', function () {
 
     // Data must remain unchanged
     $this->assertDatabaseHas('restaurants', ['id' => $restaurant->id, 'name' => 'Original Name']);
+});
+
+it('pre-fills service_level when editing a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_level' => ServiceLevel::Casual,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->assertSet('service_level', ServiceLevel::Casual->value);
+});
+
+it('pre-fills service_options when editing a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_options' => [ServiceOption::DineIn->value, ServiceOption::Takeout->value],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->assertSet('service_options', [ServiceOption::DineIn->value, ServiceOption::Takeout->value]);
+});
+
+it('pre-fills primary_cuisine when editing a restaurant', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'primary_cuisine' => PrimaryCuisine::Italian,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->assertSet('primary_cuisine', PrimaryCuisine::Italian->value);
+});
+
+it('updates the classification fields on save', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['casual'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->set('service_level', ServiceLevel::FineDining->value)
+        ->set('service_options', [ServiceOption::Delivery->value])
+        ->set('primary_cuisine', PrimaryCuisine::Thai->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $fresh = $restaurant->fresh();
+    expect($fresh->service_level)->toBe(ServiceLevel::FineDining)
+        ->and($fresh->service_options)->toEqualCanonicalizing([ServiceOption::Delivery->value])
+        ->and($fresh->primary_cuisine)->toBe(PrimaryCuisine::Thai);
+});
+
+it('pre-fills empty classification fields without errors', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_level' => null,
+        'service_options' => null,
+        'primary_cuisine' => null,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->assertSet('service_level', null)
+        ->assertSet('service_options', [])
+        ->assertSet('primary_cuisine', null);
+});
+
+it('clears classification fields to null when the selects are set blank on edit', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['casual'],
+        'service_level' => ServiceLevel::Casual,
+        'service_options' => [ServiceOption::DineIn->value],
+        'primary_cuisine' => PrimaryCuisine::Italian,
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->set('service_level', '')
+        ->set('primary_cuisine', '')
+        ->set('service_options', [])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $fresh = $restaurant->fresh();
+    expect($fresh->service_level)->toBeNull()
+        ->and($fresh->service_options)->toBeNull()
+        ->and($fresh->primary_cuisine)->toBeNull();
+});
+
+it('rejects an invalid service_level when editing', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['casual'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->set('service_level', 'not_real')
+        ->call('save')
+        ->assertHasErrors(['service_level']);
 });
 
 it('does not overwrite source or visit count on save', function () {

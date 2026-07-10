@@ -2,7 +2,10 @@
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -145,4 +148,76 @@ it('scopes restaurants to a specific owner via scopeOwnedBy', function () {
     $user1Restaurants = Restaurant::ownedBy($user1)->get();
 
     expect($user1Restaurants)->toHaveCount(2);
+});
+
+it('casts service_level to a ServiceLevel enum', function () {
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_level' => ServiceLevel::Casual,
+    ]);
+
+    $fresh = $restaurant->fresh();
+
+    expect($fresh->service_level)->toBeInstanceOf(ServiceLevel::class)
+        ->and($fresh->service_level)->toBe(ServiceLevel::Casual);
+});
+
+it('casts service_options to an array', function () {
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_options' => ['dine_in', 'takeout'],
+    ]);
+
+    $fresh = $restaurant->fresh();
+
+    expect($fresh->service_options)->toBeArray()->toBe(['dine_in', 'takeout']);
+});
+
+it('casts primary_cuisine to a PrimaryCuisine enum', function () {
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'primary_cuisine' => PrimaryCuisine::Italian,
+    ]);
+
+    $fresh = $restaurant->fresh();
+
+    expect($fresh->primary_cuisine)->toBeInstanceOf(PrimaryCuisine::class)
+        ->and($fresh->primary_cuisine)->toBe(PrimaryCuisine::Italian);
+});
+
+it('allows null for all three classification fields', function () {
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'service_level' => null,
+        'service_options' => null,
+        'primary_cuisine' => null,
+    ]);
+
+    $fresh = $restaurant->fresh();
+
+    expect($fresh->service_level)->toBeNull()
+        ->and($fresh->service_options)->toBeNull()
+        ->and($fresh->primary_cuisine)->toBeNull();
+});
+
+it('returns a friendly label for every ServiceLevel case', function () {
+    foreach (ServiceLevel::cases() as $case) {
+        expect($case->label())->toBeString()->not->toBeEmpty();
+    }
+});
+
+it('returns a friendly label for every ServiceOption case', function () {
+    foreach (ServiceOption::cases() as $case) {
+        expect($case->label())->toBeString()->not->toBeEmpty();
+    }
+});
+
+it('returns a friendly label for every PrimaryCuisine case', function () {
+    foreach (PrimaryCuisine::cases() as $case) {
+        expect($case->label())->toBeString()->not->toBeEmpty();
+    }
 });

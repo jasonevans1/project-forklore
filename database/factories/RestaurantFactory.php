@@ -4,7 +4,10 @@ namespace Database\Factories;
 
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
+use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,6 +25,8 @@ class RestaurantFactory extends Factory
      */
     public function definition(): array
     {
+        $serviceLevel = fake()->randomElement(ServiceLevel::cases());
+
         return [
             'owner_user_id' => User::factory(),
             'name' => fake()->company().' Restaurant',
@@ -37,6 +42,50 @@ class RestaurantFactory extends Factory
             'lng' => -93.62 + (fake()->randomFloat(4, -0.05, 0.05)),
             'last_visited_at' => null,
             'visit_count' => 0,
+            'service_level' => $serviceLevel,
+            'service_options' => $this->serviceOptionsFor($serviceLevel),
+            'primary_cuisine' => fake()->randomElement(PrimaryCuisine::cases()),
         ];
+    }
+
+    /**
+     * Force a specific service level, regenerating service options to match.
+     */
+    public function withServiceLevel(ServiceLevel $serviceLevel): static
+    {
+        return $this->state(fn (): array => [
+            'service_level' => $serviceLevel,
+            'service_options' => $this->serviceOptionsFor($serviceLevel),
+        ]);
+    }
+
+    /**
+     * Generate a realistic set of service options for the given service level.
+     *
+     * @return array<int, string>
+     */
+    private function serviceOptionsFor(ServiceLevel $serviceLevel): array
+    {
+        $options = match ($serviceLevel) {
+            ServiceLevel::FastFood => array_filter([
+                ServiceOption::Takeout,
+                fake()->boolean(70) ? ServiceOption::DriveThru : null,
+                fake()->boolean(50) ? ServiceOption::Delivery : null,
+                fake()->boolean(50) ? ServiceOption::DineIn : null,
+            ]),
+            ServiceLevel::FastCasual, ServiceLevel::Casual => array_filter([
+                ServiceOption::DineIn,
+                fake()->boolean(70) ? ServiceOption::Takeout : null,
+                fake()->boolean(40) ? ServiceOption::Delivery : null,
+                fake()->boolean(30) ? ServiceOption::Curbside : null,
+            ]),
+            ServiceLevel::UpscaleCasual => array_filter([
+                ServiceOption::DineIn,
+                fake()->boolean(30) ? ServiceOption::Takeout : null,
+            ]),
+            ServiceLevel::FineDining => [ServiceOption::DineIn],
+        };
+
+        return array_values(array_map(fn (ServiceOption $option): string => $option->value, $options));
     }
 }
