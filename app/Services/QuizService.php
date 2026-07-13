@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\PatioQuality;
+use App\Enums\ServiceLevel;
 use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\User;
@@ -16,9 +17,6 @@ class QuizService
 
     /** Bonus when a restaurant's vibe_tags match the energy answer. */
     private const int ENERGY_MATCH_BONUS = 30;
-
-    /** Bonus when a restaurant's cuisine_tags match the cuisine answer. */
-    private const int CUISINE_MATCH_BONUS = 40;
 
     /** Bonus/penalty scaling for price_level vs hunger answer. */
     private const int HUNGER_MATCH_BONUS = 25;
@@ -50,11 +48,17 @@ class QuizService
     /** Ideal patio upper bound (°F). */
     private const float PATIO_BOOST_MAX_F = 85.0;
 
-    /** Max distance (miles) for distance=nearby. */
-    private const float NEARBY_MILES = 2.0;
-
-    /** Max distance (miles) for distance=close. */
-    private const float CLOSE_MILES = 5.0;
+    /**
+     * Distance bucket boundaries in miles, keyed by the QuizAnswers::$distance value.
+     * Each range is (min, max] except the first bucket, which starts at 0.
+     *
+     * @var array<string, array{0: float, 1: float}>
+     */
+    private const array DISTANCE_BUCKETS = [
+        'under_2_miles' => [0.0, 2.0],
+        '2_to_5_miles' => [2.0, 5.0],
+        '5_to_15_miles' => [5.0, 15.0],
+    ];
 
     public function __construct(
         private readonly WeatherService $weather,
@@ -107,27 +111,51 @@ class QuizService
     // -------------------------------------------------------------------------
 
     /**
-     * Load user favorites and apply distance filtering from the quiz answers.
+     * Load user favorites and apply hard filters from the quiz answers
+     * (service level, dine-in/takeout, and distance).
      *
      * @return Collection<int, Restaurant>
      */
     private function buildPool(User $user, QuizAnswers $answers): Collection
     {
-        $restaurants = Restaurant::ownedBy($user)->favorites()->get();
+        $query = Restaurant::ownedBy($user)->favorites();
 
-        // Apply distance filter when the user chose nearby/close and coordinates are available.
-        if ($answers->distance !== 'anywhere' && $answers->lat !== null && $answers->lng !== null) {
-            $maxMiles = $answers->distance === 'nearby' ? self::NEARBY_MILES : self::CLOSE_MILES;
+        match ($answers->serviceLevel) {
+            'quick_easy' => $query->whereIn('service_level', [ServiceLevel::FastFood->value, ServiceLevel::FastCasual->value]),
+            'casual_sit_down' => $query->where('service_level', ServiceLevel::Casual->value),
+            'nicer_night_out' => $query->where('service_level', ServiceLevel::UpscaleCasual->value),
+            'special_occasion' => $query->where('service_level', ServiceLevel::FineDining->value),
+            default => null,
+        };
 
+        if ($answers->cuisine !== null) {
+            $query->where('primary_cuisine', $answers->cuisine);
+        }
+
+        $restaurants = $query->get();
+
+        // Apply dine-in/takeout filter in PHP — service_options is a JSON array column,
+        // and SQLite (the default/test connection) does not support whereJsonContains.
+        if ($answers->dineInTakeout !== 'either') {
             $restaurants = $restaurants->filter(
-                fn (Restaurant $r) => $r->lat !== null && $r->lng !== null
-                    && $this->distanceMiles(
-                        (float) $r->lat,
-                        (float) $r->lng,
-                        $answers->lat,
-                        $answers->lng,
-                    ) <= $maxMiles
+                fn (Restaurant $r) => in_array($answers->dineInTakeout, $r->service_options ?? [], true)
             )->values();
+        }
+
+        // Apply distance filter when the user chose a bucket and coordinates are available.
+        if (isset(self::DISTANCE_BUCKETS[$answers->distance]) && $answers->lat !== null && $answers->lng !== null) {
+            [$minMiles, $maxMiles] = self::DISTANCE_BUCKETS[$answers->distance];
+
+            $restaurants = $restaurants->filter(function (Restaurant $r) use ($minMiles, $maxMiles, $answers): bool {
+                if ($r->lat === null || $r->lng === null) {
+                    return false;
+                }
+
+                $distance = $this->distanceMiles((float) $r->lat, (float) $r->lng, $answers->lat, $answers->lng);
+                $passesMin = $minMiles === 0.0 ? $distance >= $minMiles : $distance > $minMiles;
+
+                return $passesMin && $distance <= $maxMiles;
+            })->values();
         }
 
         return $restaurants;
@@ -180,14 +208,6 @@ class QuizService
                 'familiar' => (int) min($r->visit_count, 1) * self::FAMILIAR_BONUS,
                 default => 0,
             };
-
-            // Cuisine
-            if ($answers->cuisine !== null) {
-                $cuisines = array_map('strtolower', $r->cuisine_tags ?? []);
-                if (in_array(strtolower($answers->cuisine), $cuisines, true)) {
-                    $score += self::CUISINE_MATCH_BONUS;
-                }
-            }
 
             // Weather
             if ($weather !== null) {

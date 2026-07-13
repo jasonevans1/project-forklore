@@ -121,11 +121,13 @@ it('records the current user as last picker after going on quiz', function () {
 
     Livewire::actingAs($this->alice)
         ->test('pages::quiz')
+        ->call('answer', 'dineInTakeout', 'either')
+        ->call('answer', 'serviceLevel', 'casual_sit_down')
+        ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'moderate')
         ->call('answer', 'hunger', 'moderate')
-        ->call('answer', 'familiarity', 'either')
         ->call('answer', 'distance', 'anywhere')
-        ->call('answer', 'cuisine', null)
+        ->call('answer', 'familiarity', 'either')
         ->call('going');
 
     $this->assertDatabaseHas('household_state', [

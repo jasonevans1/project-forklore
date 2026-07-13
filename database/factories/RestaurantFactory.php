@@ -25,7 +25,9 @@ class RestaurantFactory extends Factory
      */
     public function definition(): array
     {
-        $serviceLevel = fake()->randomElement(ServiceLevel::cases());
+        // ponytail: fixed rather than random so factory-created restaurants match the
+        // QuizAnswers default serviceLevel ('casual_sit_down') without extra setup in callers.
+        $serviceLevel = ServiceLevel::Casual;
 
         return [
             'owner_user_id' => User::factory(),

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ModeUsed;
+use App\Enums\QuizQuestion;
 use App\Models\Restaurant;
 use App\Models\Visit;
 use App\Models\HouseholdState;
@@ -18,13 +19,15 @@ new #[Title('Guided Quiz')] class extends Component {
     /** Current state: 'questions' | 'result' | 'empty' */
     public string $state = 'questions';
 
-    /** Current wizard step (1–5). */
+    /** Current wizard step (1–7). */
     public int $step = 1;
 
     /** ID of the top-matched restaurant. */
     public ?int $restaurantId = null;
 
     // Quiz answer fields — populated one per step.
+    public ?string $dineInTakeout = null;
+    public ?string $serviceLevel = null;
     public ?string $energy = null;
     public ?string $hunger = null;
     public ?string $familiarity = null;
@@ -51,6 +54,8 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->step = $snapshot['step'];
         $this->state = $snapshot['state'];
         $this->restaurantId = $snapshot['restaurantId'];
+        $this->dineInTakeout = $snapshot['dineInTakeout'];
+        $this->serviceLevel = $snapshot['serviceLevel'];
         $this->energy = $snapshot['energy'];
         $this->hunger = $snapshot['hunger'];
         $this->familiarity = $snapshot['familiarity'];
@@ -172,6 +177,8 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->state = 'questions';
         $this->step = 1;
         $this->restaurantId = null;
+        $this->dineInTakeout = null;
+        $this->serviceLevel = null;
         $this->energy = null;
         $this->hunger = null;
         $this->familiarity = null;
@@ -186,11 +193,11 @@ new #[Title('Guided Quiz')] class extends Component {
     // -------------------------------------------------------------------------
 
     /**
-     * The current step's field name, or null if reserved/skipped.
+     * The current step's field name.
      */
     public function currentField(): ?string
     {
-        return $this->steps()[$this->step]['field'];
+        return $this->steps()[$this->step]->value;
     }
 
     /**
@@ -207,8 +214,10 @@ new #[Title('Guided Quiz')] class extends Component {
      */
     public function effectiveStepNumber(int $rawStep): int
     {
+        $answers = $this->buildAnswers();
+
         return collect($this->steps())
-            ->filter(fn (array $slot, int $key): bool => ! $slot['skip'] && $key <= $rawStep)
+            ->filter(fn (QuizQuestion $slot, int $key): bool => ! $slot->shouldSkip($answers) && $key <= $rawStep)
             ->count();
     }
 
@@ -217,7 +226,11 @@ new #[Title('Guided Quiz')] class extends Component {
      */
     public function effectiveStepTotal(): int
     {
-        return collect($this->steps())->where('skip', false)->count();
+        $answers = $this->buildAnswers();
+
+        return collect($this->steps())
+            ->filter(fn (QuizQuestion $slot): bool => ! $slot->shouldSkip($answers))
+            ->count();
     }
 
     /**
@@ -226,8 +239,10 @@ new #[Title('Guided Quiz')] class extends Component {
      */
     private function nextRawStep(int $from): ?int
     {
+        $answers = $this->buildAnswers();
+
         return collect($this->steps())
-            ->filter(fn (array $slot, int $key): bool => $key > $from && ! $slot['skip'])
+            ->filter(fn (QuizQuestion $slot, int $key): bool => $key > $from && ! $slot->shouldSkip($answers))
             ->keys()
             ->first();
     }
@@ -238,28 +253,29 @@ new #[Title('Guided Quiz')] class extends Component {
      */
     private function previousRawStep(int $from): ?int
     {
+        $answers = $this->buildAnswers();
+
         return collect($this->steps())
-            ->filter(fn (array $slot, int $key): bool => $key < $from && ! $slot['skip'])
+            ->filter(fn (QuizQuestion $slot, int $key): bool => $key < $from && ! $slot->shouldSkip($answers))
             ->keys()
             ->last();
     }
 
     /**
-     * Fixed 7-slot step registry: 5 real question slots plus 2 reserved,
-     * always-skipped placeholders.
+     * Fixed 7-slot step registry — every slot is a real question.
      *
-     * @return array<int, array{field: string|null, skip: bool}>
+     * @return array<int, QuizQuestion>
      */
     private function steps(): array
     {
         return [
-            1 => ['field' => 'energy', 'skip' => false],
-            2 => ['field' => 'hunger', 'skip' => false],
-            3 => ['field' => 'familiarity', 'skip' => false],
-            4 => ['field' => 'distance', 'skip' => false],
-            5 => ['field' => 'cuisine', 'skip' => false],
-            6 => ['field' => null, 'skip' => true], // ponytail: reserved slot, real question TBD
-            7 => ['field' => null, 'skip' => true], // ponytail: reserved slot, real question TBD
+            1 => QuizQuestion::DineInTakeout,
+            2 => QuizQuestion::ServiceLevel,
+            3 => QuizQuestion::Cuisine,
+            4 => QuizQuestion::Energy,
+            5 => QuizQuestion::Hunger,
+            6 => QuizQuestion::Distance,
+            7 => QuizQuestion::Familiarity,
         ];
     }
 
@@ -273,6 +289,8 @@ new #[Title('Guided Quiz')] class extends Component {
             'step' => $this->step,
             'state' => $this->state,
             'restaurantId' => $this->restaurantId,
+            'dineInTakeout' => $this->dineInTakeout,
+            'serviceLevel' => $this->serviceLevel,
             'energy' => $this->energy,
             'hunger' => $this->hunger,
             'familiarity' => $this->familiarity,
@@ -318,6 +336,8 @@ new #[Title('Guided Quiz')] class extends Component {
             cuisine: $this->cuisine,
             lat: $this->lat,
             lng: $this->lng,
+            serviceLevel: $this->serviceLevel ?? 'casual_sit_down',
+            dineInTakeout: $this->dineInTakeout ?? 'either',
         );
     }
 
@@ -345,7 +365,7 @@ new #[Title('Guided Quiz')] class extends Component {
 >
 
     {{-- ---------------------------------------------------------------- --}}
-    {{-- QUESTIONS — 5-step wizard                                         --}}
+    {{-- QUESTIONS — skip-aware 7-step wizard                              --}}
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'questions')
 
