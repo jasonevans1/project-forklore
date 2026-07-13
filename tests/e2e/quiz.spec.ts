@@ -11,50 +11,75 @@ async function waitForLivewire(page: Page, timeout = 10_000) {
 }
 
 /**
- * Answer all 5 quiz questions with the supplied values and wait for
+ * Answer all 7 quiz questions with the supplied values and wait for
  * Livewire to resolve the result on the final step.
+ *
+ * Step order: dine-in/takeout → service level → cuisine → energy → hunger →
+ * distance → familiarity. When serviceLevel is "Quick and easy", the wizard
+ * skips the energy and familiarity steps (5-step flow instead of 7), so this
+ * helper skips clicking them too.
  */
 async function completeQuiz(
     page: Page,
     opts: {
+        dineInTakeout?: string;
+        serviceLevel?: string;
+        cuisine?: string;
         energy?: string;
         hunger?: string;
-        familiarity?: string;
         distance?: string;
-        cuisine?: string;
+        familiarity?: string;
     } = {},
 ) {
     const {
-        energy      = 'Moderate',
-        hunger      = 'Moderate',
-        familiarity = 'Either',
-        distance    = 'Anywhere',
-        cuisine     = 'Surprise me',
+        dineInTakeout = 'Either is fine',
+        serviceLevel  = 'Casual sit-down',
+        cuisine       = 'Surprise me',
+        energy        = 'Moderate',
+        hunger        = 'Moderate',
+        distance      = 'Anywhere',
+        familiarity   = 'Either',
     } = opts;
+
+    const isQuickEasy = /quick/i.test(serviceLevel);
 
     // Each step triggers a Livewire round-trip. We wait for each response before
     // clicking the next answer so rapid-fire clicks don't race past the DOM update
-    // (steps 1 and 2 both have a 'Moderate' button, making races easy to trigger).
+    // (steps 4 and 5 — energy and hunger — both have a 'Moderate' button, making
+    // races easy to trigger).
     let step = waitForLivewire(page);
-    await page.getByRole('button', { name: new RegExp(energy, 'i') }).click();
+    await page.getByRole('button', { name: new RegExp(dineInTakeout, 'i') }).click();
     await step;
+
+    step = waitForLivewire(page);
+    await page.getByRole('button', { name: new RegExp(serviceLevel, 'i') }).click();
+    await step;
+
+    step = waitForLivewire(page);
+    await page.getByRole('button', { name: new RegExp(cuisine, 'i') }).click();
+    await step;
+
+    if (!isQuickEasy) {
+        step = waitForLivewire(page);
+        await page.getByRole('button', { name: new RegExp(energy, 'i') }).click();
+        await step;
+    }
 
     step = waitForLivewire(page);
     await page.getByRole('button', { name: new RegExp(hunger, 'i') }).click();
     await step;
 
-    step = waitForLivewire(page);
-    await page.getByRole('button', { name: new RegExp(familiarity, 'i') }).click();
-    await step;
-
+    // For a quick_easy flow, this distance click resolves the quiz (familiarity
+    // is skipped). Otherwise familiarity below resolves it.
     step = waitForLivewire(page);
     await page.getByRole('button', { name: new RegExp(distance, 'i') }).click();
     await step;
 
-    // Step 5 resolves the quiz — this response carries the result state.
-    step = waitForLivewire(page);
-    await page.getByRole('button', { name: new RegExp(cuisine, 'i') }).click();
-    await step;
+    if (!isQuickEasy) {
+        step = waitForLivewire(page);
+        await page.getByRole('button', { name: new RegExp(familiarity, 'i') }).click();
+        await step;
+    }
 }
 
 /**
@@ -111,103 +136,160 @@ test.describe('guided quiz', () => {
         await expect(page.getByRole('link', { name: /Quiz/i })).toBeVisible();
     });
 
-    // ── Step 1 — energy ───────────────────────────────────────────────────────
+    // ── Step 1 — dine-in/takeout ─────────────────────────────────────────────
 
-    test('shows step 1 of 5 on load', async ({ page }) => {
+    test('shows step 1 of 7 on load', async ({ page }) => {
         await page.goto('/quiz');
-        await expect(page.getByText('Step 1 of 5')).toBeVisible();
+        await expect(page.getByText('Step 1 of 7')).toBeVisible();
     });
 
-    test('shows the energy question on step 1', async ({ page }) => {
+    test('shows the dine-in/takeout question on step 1', async ({ page }) => {
         await page.goto('/quiz');
-        await expect(page.getByText("What's your energy tonight?")).toBeVisible();
+        await expect(page.getByText('Dine in or takeout?')).toBeVisible();
     });
 
-    test('step 1 shows Lively, Moderate and Quiet answer buttons', async ({ page }) => {
+    test('step 1 shows Dine in, Takeout and Either is fine answer buttons', async ({ page }) => {
         await page.goto('/quiz');
-        await expect(page.getByRole('button', { name: /Lively/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Moderate/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Quiet/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Dine in/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Takeout/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Either is fine/i })).toBeVisible();
     });
 
     // ── Progress bar ──────────────────────────────────────────────────────────
 
-    test('progress bar advances to step 2 after answering energy', async ({ page }) => {
+    test('progress bar advances to step 2 after answering dine-in/takeout', async ({ page }) => {
         await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await expect(page.getByText('Step 2 of 5')).toBeVisible();
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await expect(page.getByText('Step 2 of 7')).toBeVisible();
     });
 
-    test('progress bar advances to step 3 after answering hunger', async ({ page }) => {
+    test('progress bar advances to step 3 after answering service level', async ({ page }) => {
         await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click(); // dine-in/takeout
+        await page.getByRole('button', { name: /Casual sit-down/i }).click(); // service level
+        await expect(page.getByText('Step 3 of 7')).toBeVisible();
+    });
+
+    test('progress bar advances to step 4 after answering cuisine', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click(); // cuisine
+        await expect(page.getByText('Step 4 of 7')).toBeVisible();
+    });
+
+    test('progress bar advances to step 5 after answering energy', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await expect(page.getByText('Step 5 of 7')).toBeVisible();
+    });
+
+    test('progress bar advances to step 6 after answering hunger', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
         await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await expect(page.getByText('Step 6 of 7')).toBeVisible();
+    });
+
+    test('progress bar advances to step 7 after answering distance', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
+        await expect(page.getByText('Step 7 of 7')).toBeVisible();
+    });
+
+    test('choosing Quick and easy service level shortens the flow to 5 steps', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click(); // dine-in/takeout
+        await page.getByRole('button', { name: /Quick and easy/i }).click(); // service level
+        // Lands on step 3 (cuisine) — dineInTakeout + serviceLevel + cuisine = effective step 3 of 5.
         await expect(page.getByText('Step 3 of 5')).toBeVisible();
-    });
-
-    test('progress bar advances to step 4 after answering familiarity', async ({ page }) => {
-        await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Either/i }).click();
-        await expect(page.getByText('Step 4 of 5')).toBeVisible();
-    });
-
-    test('progress bar advances to step 5 after answering distance', async ({ page }) => {
-        await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Either/i }).click();
-        await page.getByRole('button', { name: /Anywhere/i }).click();
-        await expect(page.getByText('Step 5 of 5')).toBeVisible();
     });
 
     // ── Step content ──────────────────────────────────────────────────────────
 
-    test('step 2 shows the hunger question', async ({ page }) => {
+    test('step 2 shows the service level question', async ({ page }) => {
         await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await expect(page.getByText(/hunger/i)).toBeVisible();
-        await expect(page.getByRole('button', { name: /Light bite/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Very hungry/i })).toBeVisible();
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await expect(page.getByText('What kind of night is it?')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Quick and easy/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Casual sit-down/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Nicer night out/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Special occasion/i })).toBeVisible();
     });
 
-    test('step 3 shows the familiar vs new question', async ({ page }) => {
+    test('step 3 shows the cuisine question with a Surprise me option', async ({ page }) => {
         await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await expect(page.getByText('Something new or a familiar spot?')).toBeVisible();
-        await expect(page.getByRole('button', { name: /Something new/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /A favorite/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Either/i })).toBeVisible();
-    });
-
-    test('step 4 shows the distance question', async ({ page }) => {
-        await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Either/i }).click();
-        await expect(page.getByText('How far are you willing to go?')).toBeVisible();
-        await expect(page.getByRole('button', { name: /Nearby/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Close/i }).first()).toBeVisible();
-        await expect(page.getByRole('button', { name: /Anywhere/i })).toBeVisible();
-    });
-
-    test('step 5 shows the cuisine question with a Surprise me option', async ({ page }) => {
-        await page.goto('/quiz');
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Either/i }).click();
-        await page.getByRole('button', { name: /Anywhere/i }).click();
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await expect(page.getByText('Any cuisine in mind?')).toBeVisible();
         await expect(page.getByRole('button', { name: /Surprise me/i })).toBeVisible();
         await expect(page.getByRole('button', { name: /Italian/i })).toBeVisible();
         await expect(page.getByRole('button', { name: /Mexican/i })).toBeVisible();
     });
 
+    test('step 4 shows the energy question', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await expect(page.getByText("What's your energy tonight?")).toBeVisible();
+        await expect(page.getByRole('button', { name: /Lively/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Quiet/i })).toBeVisible();
+    });
+
+    test('step 5 shows the hunger question', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await expect(page.getByText(/hunger/i)).toBeVisible();
+        await expect(page.getByRole('button', { name: /Light bite/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Very hungry/i })).toBeVisible();
+    });
+
+    test('step 6 shows the distance question', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await expect(page.getByText('How far are you willing to go?')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Under 2 mi/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /2–5 mi/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /5–15 mi/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Anywhere/i })).toBeVisible();
+    });
+
+    test('step 7 shows the familiar vs new question', async ({ page }) => {
+        await page.goto('/quiz');
+        await page.getByRole('button', { name: /Either is fine/i }).click();
+        await page.getByRole('button', { name: /Casual sit-down/i }).click();
+        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
+        await expect(page.getByText('Something new or a familiar spot?')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Something new/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /A favorite/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Either/i })).toBeVisible();
+    });
+
     // ── Result card ───────────────────────────────────────────────────────────
 
-    test('shows a result card after completing all 5 questions', async ({ page }) => {
+    test('shows a result card after completing all 7 questions', async ({ page }) => {
         await page.goto('/quiz');
         await completeQuiz(page);
 
@@ -335,7 +417,7 @@ test.describe('guided quiz', () => {
             energy: 'Lively',
             hunger: 'Light bite',
             familiarity: 'Something new',
-            distance: 'Nearby',
+            distance: 'Under 2 mi',
             cuisine: 'Italian',
         });
 
@@ -372,7 +454,7 @@ test.describe('guided quiz', () => {
             energy: 'Lively',
             hunger: 'Light bite',
             familiarity: 'Something new',
-            distance: 'Nearby',
+            distance: 'Under 2 mi',
             cuisine: 'Italian',
         });
 
@@ -397,8 +479,8 @@ test.describe('guided quiz', () => {
         }
 
         await page.getByRole('button', { name: 'Start over' }).click();
-        await expect(page.getByText('Step 1 of 5')).toBeVisible();
-        await expect(page.getByText(/energy/i)).toBeVisible();
+        await expect(page.getByText('Step 1 of 7')).toBeVisible();
+        await expect(page.getByText(/dineInTakeout/i)).toBeVisible();
     });
 
     // ── Going flow ────────────────────────────────────────────────────────────
@@ -434,11 +516,13 @@ test.describe('guided quiz', () => {
     test('shows a loading indicator while the final answer is being resolved', async ({ page }) => {
         await page.goto('/quiz');
 
-        // Answer steps 1–4 without a delay.
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Moderate/i }).click();
-        await page.getByRole('button', { name: /Either/i }).click();
-        await page.getByRole('button', { name: /Anywhere/i }).click();
+        // Answer steps 1–6 without a delay.
+        await page.getByRole('button', { name: /Either is fine/i }).click(); // dine-in/takeout
+        await page.getByRole('button', { name: /Casual sit-down/i }).click(); // service level
+        await page.getByRole('button', { name: /Surprise me/i }).click(); // cuisine
+        await page.getByRole('button', { name: /Moderate/i }).click(); // energy
+        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
 
         // Intercept the Livewire resolve request and hold it so the loading
         // indicator stays visible long enough for the assertion.
@@ -447,11 +531,11 @@ test.describe('guided quiz', () => {
             await route.continue();
         });
 
-        await page.getByRole('button', { name: /Surprise me/i }).click();
+        await page.getByRole('button', { name: /Either/i }).click(); // familiarity — resolves the quiz
 
         // Livewire's wire:loading attribute renders a loading indicator on the
         // active button while the network request is in flight.
-        await expect(page.getByText(/Surprise me/i)).toBeVisible();
+        await expect(page.getByText(/Either/i)).toBeVisible();
     });
 });
 
@@ -472,7 +556,7 @@ test.describe('guided quiz — mobile', () => {
         await page.goto('/quiz');
 
         // Measure the first answer button on step 1.
-        const btn = page.getByRole('button', { name: /Lively/i });
+        const btn = page.getByRole('button', { name: /Dine in/i });
         await expect(btn).toBeVisible();
 
         const box = await btn.boundingBox();
