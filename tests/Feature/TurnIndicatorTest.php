@@ -98,6 +98,7 @@ it('updates the partner household_state row too after going on quick pick', func
 it('shows a turn indicator on the quiz page when a partner exists', function () {
     Livewire::actingAs($this->alice)
         ->test('pages::quiz')
+        ->call('startQuiz')
         ->assertSee('turn');
 });
 
@@ -106,6 +107,7 @@ it('shows "Your turn" on quiz page when the partner last picked', function () {
 
     Livewire::actingAs($this->alice)
         ->test('pages::quiz')
+        ->call('startQuiz')
         ->assertSee('Your turn');
 });
 
@@ -116,7 +118,6 @@ it('shows "Your turn" on quiz page when the partner last picked', function () {
 it('records the current user as last picker after going on quiz', function () {
     $restaurant = Restaurant::factory()->for($this->alice, 'user')->create();
 
-    $mock = app()->make(QuizService::class);
     $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
 
     Livewire::actingAs($this->alice)
