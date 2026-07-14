@@ -18,7 +18,7 @@ class QuizService
     /** Bonus when a restaurant's vibe_tags match the energy answer. */
     private const int ENERGY_MATCH_BONUS = 30;
 
-    /** Bonus/penalty scaling for price_level vs hunger answer. */
+    /** Bonus/penalty scaling for avg_duration_minutes vs hunger answer. */
     private const int HUNGER_MATCH_BONUS = 25;
 
     /** Bonus when familiarity=familiar and restaurant has high visit_count. */
@@ -190,16 +190,16 @@ class QuizService
                 $score += self::ENERGY_MATCH_BONUS;
             }
 
-            // Hunger — ideal price_level per answer: light=1, moderate=2, hungry=4
-            $idealPrice = match ($answers->hunger) {
-                'light' => 1,
-                'hungry' => 4,
-                default => 2,
+            // Hunger — ideal avg_duration_minutes per answer: quick_bite=45, full_meal=75, feast=120
+            $idealDuration = match ($answers->hunger) {
+                'quick_bite' => 45,
+                'feast' => 120,
+                default => 75,
             };
 
-            if ($r->price_level !== null) {
-                $gap = abs($r->price_level - $idealPrice);
-                $score += self::HUNGER_MATCH_BONUS - ($gap * 10);
+            if ($r->avg_duration_minutes !== null) {
+                $gap = abs($r->avg_duration_minutes - $idealDuration);
+                $score += self::HUNGER_MATCH_BONUS - intdiv($gap * 2, 5);
             }
 
             // Familiarity
