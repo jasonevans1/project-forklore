@@ -12,6 +12,7 @@ use App\Services\WeatherData;
 use App\Services\WeatherService;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -21,6 +22,9 @@ new #[Title('Guided Quiz')] class extends Component {
 
     /** Current state: 'questions' | 'result' | 'empty' */
     public string $state = 'questions';
+
+    /** Whether the intro screen has been dismissed for this session. */
+    public bool $introDismissed = false;
 
     /** Current wizard step (1–7). */
     public int $step = 1;
@@ -81,6 +85,7 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->cuisine = $snapshot['cuisine'];
         $this->triedFilterLoosens = $snapshot['triedFilterLoosens'] ?? [];
         $this->activeLoosenedField = $snapshot['activeLoosenedField'] ?? null;
+        $this->introDismissed = $snapshot['introDismissed'] ?? true;
     }
 
     // -------------------------------------------------------------------------
@@ -112,6 +117,26 @@ new #[Title('Guided Quiz')] class extends Component {
     }
 
     /**
+     * Message noting how many steps were skipped due to a quick_easy service
+     * level, or null when nothing was skipped. Shown on the result card.
+     */
+    #[Computed]
+    public function skippedStepsMessage(): ?string
+    {
+        $skipped = $this->skippedStepFields();
+
+        if ($skipped === []) {
+            return null;
+        }
+
+        return trans_choice(
+            'You picked fast food, so we skipped :count question|You picked fast food, so we skipped :count questions',
+            count($skipped),
+            ['count' => count($skipped)],
+        );
+    }
+
+    /**
      * Friendly label for one of the 4 hard-filter field names.
      */
     public function filterFieldLabel(string $field): string
@@ -128,6 +153,16 @@ new #[Title('Guided Quiz')] class extends Component {
     // -------------------------------------------------------------------------
     // Actions
     // -------------------------------------------------------------------------
+
+    /**
+     * Dismiss the intro screen and enter the wizard at step 1.
+     */
+    public function startQuiz(): void
+    {
+        $this->introDismissed = true;
+
+        $this->persistSession();
+    }
 
     /**
      * Store the answer for the current step and advance — resolving the result
@@ -228,6 +263,7 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->distanceLabel = $this->resolveDistanceLabel($restaurant);
         $this->peekedRunnerUpName = null;
         unset($this->restaurant);
+        $this->logQuizCompletion();
         $this->persistSession();
     }
 
@@ -291,6 +327,7 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->triedFilterLoosens = [];
         $this->activeLoosenedField = null;
         $this->peekedRunnerUpName = null;
+        $this->introDismissed = true;
 
         $this->clearSession();
     }
@@ -369,6 +406,23 @@ new #[Title('Guided Quiz')] class extends Component {
     }
 
     /**
+     * Field-name values of every step in the registry that is skipped for
+     * the current answers (e.g. energy/familiarity under quick_easy).
+     *
+     * @return array<int, string>
+     */
+    private function skippedStepFields(): array
+    {
+        $answers = $this->buildAnswers();
+
+        return collect($this->steps())
+            ->filter(fn (QuizQuestion $slot): bool => $slot->shouldSkip($answers))
+            ->map(fn (QuizQuestion $slot): string => $slot->value)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Fixed 7-slot step registry — every slot is a real question.
      *
      * @return array<int, QuizQuestion>
@@ -405,6 +459,7 @@ new #[Title('Guided Quiz')] class extends Component {
             'cuisine' => $this->cuisine,
             'triedFilterLoosens' => $this->triedFilterLoosens,
             'activeLoosenedField' => $this->activeLoosenedField,
+            'introDismissed' => $this->introDismissed,
         ]]);
     }
 
@@ -436,6 +491,21 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->state = 'result';
         $this->tagline = $this->resolveTagline($restaurant);
         $this->distanceLabel = $this->resolveDistanceLabel($restaurant);
+        $this->logQuizCompletion();
+    }
+
+    /**
+     * Log which steps were skipped (and why) for this completed run.
+     */
+    private function logQuizCompletion(): void
+    {
+        $skipped = $this->skippedStepFields();
+
+        Log::info('Quiz completed', [
+            'user_id' => Auth::id(),
+            'skipped_steps' => $skipped,
+            'skip_reason' => $skipped === [] ? null : 'quick_easy_service_level',
+        ]);
     }
 
     /**
@@ -496,49 +566,69 @@ new #[Title('Guided Quiz')] class extends Component {
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'questions')
 
-        {{-- Header: turn indicator + start-over action --}}
-        @php $partner = Auth::user()->partner; @endphp
-        <div class="flex items-center justify-between px-6 pt-4">
-            @if ($partner)
-                <p class="text-sm text-neutral-400 dark:text-neutral-500">
-                    @if (\App\Models\HouseholdState::isPartnersTurn(Auth::user()))
-                        {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
-                    @else
-                        {{ __('Your turn') }}
-                    @endif
-                </p>
-            @else
-                <span></span>
-            @endif
+        @if (! $introDismissed)
+            {{-- Intro screen --}}
+            <div class="flex flex-1 flex-col justify-center gap-4 px-6 text-center">
+                <flux:heading size="xl">{{ __('Guided Quiz') }}</flux:heading>
+                <flux:text class="text-neutral-500 dark:text-neutral-400">
+                    {{ __('Answer 5-7 quick questions and we\'ll pick the one restaurant that fits tonight.') }}
+                </flux:text>
+            </div>
 
-            <flux:button size="sm" variant="ghost" wire:click="restart">
-                {{ __('Start over') }}
-            </flux:button>
-        </div>
-
-        {{-- Progress indicator --}}
-        <div class="flex items-center gap-2 px-6 pt-6">
-            @foreach (range(1, $this->effectiveStepTotal()) as $i)
-                <div class="h-1.5 flex-1 rounded-full {{ $i <= $this->effectiveStepNumber($step) ? 'bg-zinc-800 dark:bg-zinc-100' : 'bg-zinc-200 dark:bg-zinc-700' }}"></div>
-            @endforeach
-        </div>
-        <p class="px-6 pt-2 text-xs text-neutral-400">{{ __('Step :step of :total', ['step' => $this->effectiveStepNumber($step), 'total' => $this->effectiveStepTotal()]) }}</p>
-
-        <div class="flex flex-1 flex-col justify-center gap-6 px-6 pb-16 pt-8">
-            @if ($this->currentField())
-                <x-dynamic-component :component="'quiz.steps.' . $this->currentField()" />
-            @endif
-        </div>
-
-        @if ($this->canGoBack())
             <div class="px-6 pb-12 pt-6">
                 <flux:button
-                    class="w-full py-4 text-base"
-                    wire:click="back"
+                    variant="primary"
+                    class="w-full py-4 text-base font-semibold"
+                    wire:click="startQuiz"
                 >
-                    {{ __('Back') }}
+                    {{ __('Start quiz') }}
                 </flux:button>
             </div>
+        @else
+            {{-- Header: turn indicator + start-over action --}}
+            @php $partner = Auth::user()->partner; @endphp
+            <div class="flex items-center justify-between px-6 pt-4">
+                @if ($partner)
+                    <p class="text-sm text-neutral-400 dark:text-neutral-500">
+                        @if (HouseholdState::isPartnersTurn(Auth::user()))
+                            {{ __('Partner\'s turn') }} &mdash; {{ $partner->name }}
+                        @else
+                            {{ __('Your turn') }}
+                        @endif
+                    </p>
+                @else
+                    <span></span>
+                @endif
+
+                <flux:button size="sm" variant="ghost" wire:click="restart">
+                    {{ __('Start over') }}
+                </flux:button>
+            </div>
+
+            {{-- Progress indicator --}}
+            <div class="flex items-center gap-2 px-6 pt-6">
+                @foreach (range(1, $this->effectiveStepTotal()) as $i)
+                    <div class="h-1.5 flex-1 rounded-full {{ $i <= $this->effectiveStepNumber($step) ? 'bg-zinc-800 dark:bg-zinc-100' : 'bg-zinc-200 dark:bg-zinc-700' }}"></div>
+                @endforeach
+            </div>
+            <p class="px-6 pt-2 text-xs text-neutral-400">{{ __('Step :step of :total', ['step' => $this->effectiveStepNumber($step), 'total' => $this->effectiveStepTotal()]) }}</p>
+
+            <div class="flex flex-1 flex-col justify-center gap-6 px-6 pb-16 pt-8">
+                @if ($this->currentField())
+                    <x-dynamic-component :component="'quiz.steps.' . $this->currentField()" />
+                @endif
+            </div>
+
+            @if ($this->canGoBack())
+                <div class="px-6 pb-12 pt-6">
+                    <flux:button
+                        class="w-full py-4 text-base"
+                        wire:click="back"
+                    >
+                        {{ __('Back') }}
+                    </flux:button>
+                </div>
+            @endif
         @endif
     @endif
 
@@ -586,6 +676,12 @@ new #[Title('Guided Quiz')] class extends Component {
                 @if ($this->restaurant->address)
                     <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">
                         {{ $this->restaurant->address }}
+                    </flux:text>
+                @endif
+
+                @if ($this->skippedStepsMessage)
+                    <flux:text class="text-sm text-neutral-400 dark:text-neutral-500">
+                        {{ $this->skippedStepsMessage }}
                     </flux:text>
                 @endif
             </div>

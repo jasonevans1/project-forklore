@@ -88,6 +88,13 @@ async function completeQuiz(
  * same two restaurants) — so this calls the component's `restart` action
  * directly via Livewire's JS API instead of depending on which button is
  * visible.
+ *
+ * `restart` also clears the session, which would leave the intro/"Start
+ * quiz" screen (gated behind `introDismissed`) showing on the next
+ * `page.goto('/quiz')` inside a test body. Immediately dismiss it again via
+ * the `startQuiz` action so the persisted session snapshot has
+ * `introDismissed: true`, and every test resumes straight into step 1 as
+ * before the intro screen existed.
  */
 async function resetQuizState(page: Page) {
     await page.goto('/quiz');
@@ -95,6 +102,10 @@ async function resetQuizState(page: Page) {
     const reset = waitForLivewire(page);
     await page.evaluate(() => (window as any).Livewire.first().call('restart'));
     await reset;
+
+    const dismissIntro = waitForLivewire(page);
+    await page.evaluate(() => (window as any).Livewire.first().call('startQuiz'));
+    await dismissIntro;
 }
 
 // ── Unauthenticated guard ─────────────────────────────────────────────────────
@@ -120,6 +131,37 @@ test.describe('guided quiz', () => {
 
     test.beforeEach(async ({ page }) => {
         await resetQuizState(page);
+    });
+
+    // ── Intro screen ──────────────────────────────────────────────────────────
+
+    test('resetQuizState leaves the session with introDismissed true so existing wizard tests still land on step 1 after a fresh page.goto', async ({ page }) => {
+        await page.goto('/quiz');
+        await expect(page.getByText('Step 1 of 7')).toBeVisible();
+    });
+
+    test('shows the entry screen with a Start quiz button before the wizard has been started', async ({ page }) => {
+        const restart = waitForLivewire(page);
+        await page.evaluate(() => (window as any).Livewire.first().call('restart'));
+        await restart;
+
+        await page.goto('/quiz');
+        await expect(page.getByRole('button', { name: /Start quiz/i })).toBeVisible();
+    });
+
+    test('tapping Start quiz transitions from the entry screen to step 1 of the wizard', async ({ page }) => {
+        const restart = waitForLivewire(page);
+        await page.evaluate(() => (window as any).Livewire.first().call('restart'));
+        await restart;
+
+        await page.goto('/quiz');
+        await expect(page.getByRole('button', { name: /Start quiz/i })).toBeVisible();
+
+        const start = waitForLivewire(page);
+        await page.getByRole('button', { name: /Start quiz/i }).click();
+        await start;
+
+        await expect(page.getByText('Step 1 of 7')).toBeVisible();
     });
 
     // ── Page shell ────────────────────────────────────────────────────────────
