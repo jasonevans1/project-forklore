@@ -1,12 +1,15 @@
 <?php
 
 use App\Enums\ModeUsed;
+use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
 use App\Services\QuizService;
+use App\Services\WeatherData;
 use App\Services\WeatherService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -234,7 +237,9 @@ it('shows the Going button on the result card', function () {
 });
 
 it('transitions to the empty state when the service returns null', function () {
-    $this->mock(QuizService::class)->allows('topMatch')->andReturnNull();
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([]);
 
     completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->assertSet('state', 'empty');
@@ -304,6 +309,7 @@ it('shows the empty state when the runner-up is also null', function () {
     $mock = $this->mock(QuizService::class);
     $mock->allows('topMatch')->andReturn($winner);
     $mock->allows('runnerUp')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([]);
 
     completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->call('reject')
@@ -315,7 +321,9 @@ it('shows the empty state when the runner-up is also null', function () {
 // ---------------------------------------------------------------------------
 
 it('resets to step 1 when the user starts over from the empty state', function () {
-    $this->mock(QuizService::class)->allows('topMatch')->andReturnNull();
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([]);
 
     completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->call('restart')
@@ -598,6 +606,276 @@ it('shows Step 1 of 7 on the first step for a casual-bound flow', function () {
 it('shows Step 3 of 5 after service level quick_easy has been answered', function () {
     answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'), 'quick_easy')
         ->assertSee('Step 3 of 5');
+});
+
+// ---------------------------------------------------------------------------
+// Empty-pool loosen filters
+// ---------------------------------------------------------------------------
+
+it('shows a headline naming the most restrictive filter on the empty-pool screen', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSee('service level');
+});
+
+it('renders up to 3 loosen-filter buttons ranked by exclusion count descending', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 3,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSeeHtmlInOrder([
+            "wire:click=\"loosenFilter('serviceLevel')\"",
+            "wire:click=\"loosenFilter('distance')\"",
+            "wire:click=\"loosenFilter('dineInTakeout')\"",
+        ])
+        ->assertDontSeeHtml("wire:click=\"loosenFilter('cuisine')\"");
+});
+
+it('still shows the No matches found heading and Start over button on the empty-pool screen', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSee('No matches found')
+        ->assertSee('Start over');
+});
+
+it('transitions to the result state when a loosen-filter button finds a match', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturn(null, $restaurant);
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSet('state', 'empty')
+        ->call('loosenFilter', 'serviceLevel')
+        ->assertSet('state', 'result')
+        ->assertSet('restaurantId', $restaurant->id);
+});
+
+it('stays in the empty state and drops the tried filter from future ranking when the loosened pool is still empty', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('loosenFilter', 'serviceLevel')
+        ->assertSet('state', 'empty')
+        ->assertSet('triedFilterLoosens', ['serviceLevel'])
+        ->assertDontSeeHtml("wire:click=\"loosenFilter('serviceLevel')\"")
+        ->assertSeeHtml("wire:click=\"loosenFilter('dineInTakeout')\"");
+});
+
+it('does not overwrite the original stored answer when a loosen-filter attempt fails', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('loosenFilter', 'serviceLevel')
+        ->assertSet('serviceLevel', 'casual_sit_down');
+});
+
+it('shows a generic fallback message when no filter has any exclusion power', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 0, 'serviceLevel' => 0, 'cuisine' => 0, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSee('Add more favorites');
+});
+
+it('resets triedFilterLoosens and activeLoosenedField when the user starts over', function () {
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('topMatch')->andReturnNull();
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 2, 'serviceLevel' => 5, 'cuisine' => 1, 'distance' => 0,
+    ]);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('loosenFilter', 'serviceLevel')
+        ->assertSet('triedFilterLoosens', ['serviceLevel'])
+        ->call('restart')
+        ->assertSet('triedFilterLoosens', [])
+        ->assertSet('activeLoosenedField', null);
+});
+
+it('shows the runner-up from the loosened pool when Not this one is tapped after loosening a filter', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'Loosened Winner']);
+    $runnerUp = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'Loosened Runner Up']);
+
+    $mock = $this->partialMock(QuizService::class);
+    $mock->allows('filterExclusionCounts')->andReturn([
+        'dineInTakeout' => 0, 'serviceLevel' => 5, 'cuisine' => 0, 'distance' => 0,
+    ]);
+    $mock->allows('topMatch')->andReturn(null, $winner);
+    $mock->shouldReceive('runnerUp')
+        ->withArgs(fn ($user, $answers, $restaurantWinner, $weather) => $answers->serviceLevel !== 'casual_sit_down')
+        ->andReturn($runnerUp);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('loosenFilter', 'serviceLevel')
+        ->assertSet('state', 'result')
+        ->call('reject')
+        ->assertSee('Loosened Runner Up');
+});
+
+// ---------------------------------------------------------------------------
+// Result card — distance, tagline, show-runner-up peek
+// ---------------------------------------------------------------------------
+
+it('shows a distance label on the quiz result card when coordinates are available', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.60,
+        'lng' => -93.60,
+    ]);
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    completeAllSteps(
+        Livewire::actingAs($this->user)->test('pages::quiz')
+            ->set('lat', 41.58)
+            ->set('lng', -93.62)
+    )->assertSee('mi');
+});
+
+it('shows no distance label on the quiz result card when coordinates are unavailable', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.60,
+        'lng' => -93.60,
+    ]);
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSet('distanceLabel', null);
+});
+
+it('shows a weather-aware tagline on the quiz result card', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'patio_quality' => PatioQuality::Destination,
+        'lat' => 41.58,
+        'lng' => -93.62,
+    ]);
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    // 22 °C = 71.6 °F, no rain — ideal patio weather
+    $this->mock(WeatherService::class)->allows('fetch')->andReturn(new WeatherData(
+        temperature: 22.0,
+        conditions: 'Clear',
+        precipitation: 0.0,
+        windSpeed: 2.0,
+        sunset: CarbonImmutable::now()->addHours(4),
+        units: 'metric',
+    ));
+
+    completeAllSteps(
+        Livewire::actingAs($this->user)->test('pages::quiz')
+            ->set('lat', 41.58)
+            ->set('lng', -93.62)
+    )->assertSee('Perfect patio weather');
+});
+
+it('reveals the runner-up name when Show runner-up is tapped', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create();
+    $runnerUp = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'Peeked Runner Up']);
+
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturn($winner);
+    $mock->allows('runnerUp')->andReturn($runnerUp);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('peekRunnerUp')
+        ->assertSee('Peeked Runner Up');
+});
+
+it('does not change the displayed restaurant when Show runner-up is tapped', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create();
+    $runnerUp = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturn($winner);
+    $mock->allows('runnerUp')->andReturn($runnerUp);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('peekRunnerUp')
+        ->assertSet('restaurantId', $winner->id)
+        ->assertSet('state', 'result');
+});
+
+it('shows a no-other-match indicator when Show runner-up is tapped and no runner-up exists', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturn($winner);
+    $mock->allows('runnerUp')->andReturnNull();
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('peekRunnerUp')
+        ->assertSet('state', 'result')
+        ->assertSet('restaurantId', $winner->id)
+        ->assertSee('No other match');
+});
+
+it('clears the peeked runner-up name after Not this one swaps to a new restaurant', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create();
+    $peekedRunnerUp = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'Peeked Only']);
+    $rejectRunnerUp = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturn($winner);
+    $mock->allows('runnerUp')->andReturn($peekedRunnerUp, $rejectRunnerUp);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->call('peekRunnerUp')
+        ->assertSet('peekedRunnerUpName', 'Peeked Only')
+        ->call('reject')
+        ->assertSet('peekedRunnerUpName', null);
+});
+
+it('populates the tagline and distance label after Not this one swaps to the runner-up', function () {
+    $winner = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.60,
+        'lng' => -93.60,
+    ]);
+    $runnerUp = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.61,
+        'lng' => -93.61,
+    ]);
+
+    $mock = $this->mock(QuizService::class);
+    $mock->allows('topMatch')->andReturn($winner);
+    $mock->allows('runnerUp')->andReturn($runnerUp);
+
+    completeAllSteps(
+        Livewire::actingAs($this->user)->test('pages::quiz')
+            ->set('lat', 41.58)
+            ->set('lng', -93.62)
+    )
+        ->call('reject')
+        ->assertSet('restaurantId', $runnerUp->id)
+        ->assertSee('mi');
 });
 
 it('still shows all 7 question option buttons with unchanged copy after extraction', function () {

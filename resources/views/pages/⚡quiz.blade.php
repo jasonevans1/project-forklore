@@ -1,10 +1,11 @@
 <?php
 
+use App\Concerns\ComputesRestaurantPresentation;
 use App\Enums\ModeUsed;
 use App\Enums\QuizQuestion;
+use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\Visit;
-use App\Models\HouseholdState;
 use App\Services\QuizAnswers;
 use App\Services\QuizService;
 use App\Services\WeatherData;
@@ -16,6 +17,8 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Guided Quiz')] class extends Component {
+    use ComputesRestaurantPresentation;
+
     /** Current state: 'questions' | 'result' | 'empty' */
     public string $state = 'questions';
 
@@ -24,6 +27,21 @@ new #[Title('Guided Quiz')] class extends Component {
 
     /** ID of the top-matched restaurant. */
     public ?int $restaurantId = null;
+
+    /** Filter field names already tried via loosenFilter() this session. */
+    public array $triedFilterLoosens = [];
+
+    /** The filter field currently neutralized on the displayed result, if any. */
+    public ?string $activeLoosenedField = null;
+
+    /** Weather-aware tagline shown on the result card. */
+    public string $tagline = '';
+
+    /** Formatted distance label, e.g. "1.4 mi". Null when location is unavailable. */
+    public ?string $distanceLabel = null;
+
+    /** Name of the runner-up revealed via peekRunnerUp(), or a no-match indicator. Null until peeked. */
+    public ?string $peekedRunnerUpName = null;
 
     // Quiz answer fields — populated one per step.
     public ?string $dineInTakeout = null;
@@ -61,6 +79,8 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->familiarity = $snapshot['familiarity'];
         $this->distance = $snapshot['distance'];
         $this->cuisine = $snapshot['cuisine'];
+        $this->triedFilterLoosens = $snapshot['triedFilterLoosens'] ?? [];
+        $this->activeLoosenedField = $snapshot['activeLoosenedField'] ?? null;
     }
 
     // -------------------------------------------------------------------------
@@ -71,6 +91,38 @@ new #[Title('Guided Quiz')] class extends Component {
     public function restaurant(): ?Restaurant
     {
         return $this->restaurantId ? Restaurant::find($this->restaurantId) : null;
+    }
+
+    /**
+     * Up to 3 [field => count] entries from filterExclusionCounts(), sorted
+     * descending by count, excluding zero-count and already-tried fields.
+     *
+     * @return array<string, int>
+     */
+    #[Computed]
+    public function emptyStateFilters(): array
+    {
+        $counts = app(QuizService::class)->filterExclusionCounts(Auth::user(), $this->buildAnswers());
+
+        return collect($counts)
+            ->filter(fn (int $count, string $field): bool => $count > 0 && ! in_array($field, $this->triedFilterLoosens, true))
+            ->sortDesc()
+            ->take(3)
+            ->all();
+    }
+
+    /**
+     * Friendly label for one of the 4 hard-filter field names.
+     */
+    public function filterFieldLabel(string $field): string
+    {
+        return match ($field) {
+            'dineInTakeout' => __('dine-in/takeout preference'),
+            'serviceLevel' => __('service level'),
+            'cuisine' => __('cuisine'),
+            'distance' => __('distance'),
+            default => $field,
+        };
     }
 
     // -------------------------------------------------------------------------
@@ -111,7 +163,7 @@ new #[Title('Guided Quiz')] class extends Component {
 
         $runnerUp = app(QuizService::class)->runnerUp(
             Auth::user(),
-            $this->buildAnswers(),
+            $this->answersForCurrentResult(),
             $winner,
             $this->resolveWeather(),
         );
@@ -124,7 +176,59 @@ new #[Title('Guided Quiz')] class extends Component {
         }
 
         $this->restaurantId = $runnerUp->id;
+        $this->tagline = $this->resolveTagline($runnerUp);
+        $this->distanceLabel = $this->resolveDistanceLabel($runnerUp);
+        $this->peekedRunnerUpName = null;
         unset($this->restaurant);
+    }
+
+    /**
+     * Reveal the runner-up's name for the currently displayed result without
+     * changing the displayed restaurant.
+     */
+    public function peekRunnerUp(): void
+    {
+        $current = $this->restaurant;
+
+        if ($current === null) {
+            return;
+        }
+
+        $runnerUp = app(QuizService::class)->runnerUp(
+            Auth::user(),
+            $this->answersForCurrentResult(),
+            $current,
+            $this->resolveWeather(),
+        );
+
+        $this->peekedRunnerUpName = $runnerUp?->name ?? __('No other match found');
+    }
+
+    /**
+     * Recompute the pool with one hard filter relaxed for this attempt only.
+     * Stays in the empty state (tracking the tried field) if still no match.
+     */
+    public function loosenFilter(string $field): void
+    {
+        $service = app(QuizService::class);
+        $neutralized = $service->neutralize($this->buildAnswers(), $field);
+        $restaurant = $service->topMatch(Auth::user(), $neutralized, $this->resolveWeather());
+
+        if ($restaurant === null) {
+            $this->triedFilterLoosens[] = $field;
+            $this->persistSession();
+
+            return;
+        }
+
+        $this->restaurantId = $restaurant->id;
+        $this->activeLoosenedField = $field;
+        $this->state = 'result';
+        $this->tagline = $this->resolveTagline($restaurant);
+        $this->distanceLabel = $this->resolveDistanceLabel($restaurant);
+        $this->peekedRunnerUpName = null;
+        unset($this->restaurant);
+        $this->persistSession();
     }
 
     /**
@@ -184,6 +288,9 @@ new #[Title('Guided Quiz')] class extends Component {
         $this->familiarity = null;
         $this->distance = null;
         $this->cuisine = null;
+        $this->triedFilterLoosens = [];
+        $this->activeLoosenedField = null;
+        $this->peekedRunnerUpName = null;
 
         $this->clearSession();
     }
@@ -296,6 +403,8 @@ new #[Title('Guided Quiz')] class extends Component {
             'familiarity' => $this->familiarity,
             'distance' => $this->distance,
             'cuisine' => $this->cuisine,
+            'triedFilterLoosens' => $this->triedFilterLoosens,
+            'activeLoosenedField' => $this->activeLoosenedField,
         ]]);
     }
 
@@ -323,7 +432,25 @@ new #[Title('Guided Quiz')] class extends Component {
         }
 
         $this->restaurantId = $restaurant->id;
+        $this->activeLoosenedField = null;
         $this->state = 'result';
+        $this->tagline = $this->resolveTagline($restaurant);
+        $this->distanceLabel = $this->resolveDistanceLabel($restaurant);
+    }
+
+    /**
+     * The answers behind whatever result is currently on screen — neutralized
+     * by activeLoosenedField when the current result came from loosenFilter().
+     */
+    private function answersForCurrentResult(): QuizAnswers
+    {
+        $answers = $this->buildAnswers();
+
+        if ($this->activeLoosenedField === null) {
+            return $answers;
+        }
+
+        return app(QuizService::class)->neutralize($answers, $this->activeLoosenedField);
     }
 
     private function buildAnswers(): QuizAnswers
@@ -441,11 +568,26 @@ new #[Title('Guided Quiz')] class extends Component {
                     @if ($this->restaurant->price_level !== null)
                         <span>{{ str_repeat('$', $this->restaurant->price_level) }}</span>
                     @endif
-                    @if ($this->restaurant->address)
-                        <span aria-hidden="true">·</span>
-                        <span>{{ $this->restaurant->address }}</span>
+
+                    @if ($distanceLabel !== null)
+                        @if ($this->restaurant->price_level !== null)
+                            <span aria-hidden="true">·</span>
+                        @endif
+                        <span>{{ $distanceLabel }}</span>
                     @endif
                 </div>
+
+                @if ($tagline)
+                    <flux:text class="text-base italic text-neutral-600 dark:text-neutral-300">
+                        {{ $tagline }}
+                    </flux:text>
+                @endif
+
+                @if ($this->restaurant->address)
+                    <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">
+                        {{ $this->restaurant->address }}
+                    </flux:text>
+                @endif
             </div>
 
             <div class="flex flex-col gap-3 px-6 pb-12 pt-6">
@@ -463,6 +605,21 @@ new #[Title('Guided Quiz')] class extends Component {
                 >
                     {{ __('Not this one') }}
                 </flux:button>
+
+                <flux:button
+                    variant="ghost"
+                    size="sm"
+                    class="w-full"
+                    wire:click="peekRunnerUp"
+                >
+                    {{ __('Show runner-up') }}
+                </flux:button>
+
+                @if ($peekedRunnerUpName !== null)
+                    <flux:text class="text-center text-sm text-neutral-500 dark:text-neutral-400">
+                        {{ __('Runner-up:') }} {{ $peekedRunnerUpName }}
+                    </flux:text>
+                @endif
             </div>
         </div>
     @endif
@@ -471,11 +628,28 @@ new #[Title('Guided Quiz')] class extends Component {
     {{-- EMPTY                                                             --}}
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'empty')
+        @php $filters = $this->emptyStateFilters(); @endphp
         <div class="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
             <flux:heading size="xl">{{ __('No matches found') }}</flux:heading>
-            <flux:text class="text-neutral-500 dark:text-neutral-400">
-                {{ __("We couldn't find a match for your answers. Try loosening your preferences.") }}
-            </flux:text>
+
+            @if (! empty($filters))
+                <flux:text class="text-neutral-500 dark:text-neutral-400">
+                    {{ __('Your :filter preference is the most restrictive.', ['filter' => $this->filterFieldLabel(array_key_first($filters))]) }}
+                </flux:text>
+
+                <div class="flex flex-col gap-3 w-full max-w-xs">
+                    @foreach ($filters as $field => $count)
+                        <flux:button wire:click="loosenFilter('{{ $field }}')">
+                            {{ __('Loosen :filter', ['filter' => $this->filterFieldLabel($field)]) }}
+                        </flux:button>
+                    @endforeach
+                </div>
+            @else
+                <flux:text class="text-neutral-500 dark:text-neutral-400">
+                    {{ __('Add more favorites or try different answers to find a match.') }}
+                </flux:text>
+            @endif
+
             <flux:button wire:click="restart" variant="primary">
                 {{ __('Start over') }}
             </flux:button>
