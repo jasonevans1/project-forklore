@@ -45,7 +45,7 @@ function neutralAnswers(array $overrides = []): QuizAnswers
 {
     return new QuizAnswers(
         energy: $overrides['energy'] ?? 'moderate',
-        hunger: $overrides['hunger'] ?? 'moderate',
+        hunger: $overrides['hunger'] ?? 'full_meal',
         familiarity: $overrides['familiarity'] ?? 'either',
         distance: $overrides['distance'] ?? 'anywhere',
         cuisine: $overrides['cuisine'] ?? null,
@@ -149,26 +149,48 @@ it('scores a quiet-tagged restaurant higher when energy=quiet', function () {
 // Hunger scoring
 // ---------------------------------------------------------------------------
 
-it('scores a high price_level restaurant higher when hunger=hungry', function () {
-    $expensive = Restaurant::factory()->for($this->user, 'user')->create(['price_level' => 4, 'vibe_tags' => ['casual']]);
-    $cheap = Restaurant::factory()->for($this->user, 'user')->create(['price_level' => 1, 'vibe_tags' => ['casual']]);
+it('scores a long avg_duration_minutes restaurant higher when hunger=feast', function () {
+    $long = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 120, 'vibe_tags' => ['casual']]);
+    $short = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 45, 'vibe_tags' => ['casual']]);
 
-    $answers = neutralAnswers(['hunger' => 'hungry']);
+    $answers = neutralAnswers(['hunger' => 'feast']);
 
     $result = $this->service->topMatch($this->user, $answers);
 
-    expect($result->id)->toBe($expensive->id);
+    expect($result->id)->toBe($long->id);
 });
 
-it('scores a low price_level restaurant higher when hunger=light', function () {
-    $cheap = Restaurant::factory()->for($this->user, 'user')->create(['price_level' => 1, 'vibe_tags' => ['casual']]);
-    $expensive = Restaurant::factory()->for($this->user, 'user')->create(['price_level' => 4, 'vibe_tags' => ['casual']]);
+it('scores a short avg_duration_minutes restaurant higher when hunger=quick_bite', function () {
+    $short = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 45, 'vibe_tags' => ['casual']]);
+    $long = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 120, 'vibe_tags' => ['casual']]);
 
-    $answers = neutralAnswers(['hunger' => 'light']);
+    $answers = neutralAnswers(['hunger' => 'quick_bite']);
 
     $result = $this->service->topMatch($this->user, $answers);
 
-    expect($result->id)->toBe($cheap->id);
+    expect($result->id)->toBe($short->id);
+});
+
+it('does not apply a hunger bonus when avg_duration_minutes is null', function () {
+    $noDuration = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => null, 'vibe_tags' => ['casual']]);
+    $farFromIdeal = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 45, 'vibe_tags' => ['casual']]);
+
+    $answers = neutralAnswers(['hunger' => 'feast']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($noDuration->id);
+});
+
+it('falls back to the full_meal ideal duration for an unrecognized hunger value', function () {
+    $near75 = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 75, 'vibe_tags' => ['casual']]);
+    $far = Restaurant::factory()->for($this->user, 'user')->create(['avg_duration_minutes' => 45, 'vibe_tags' => ['casual']]);
+
+    $answers = neutralAnswers(['hunger' => 'bogus_value']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($near75->id);
 });
 
 // ---------------------------------------------------------------------------

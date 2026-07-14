@@ -36,7 +36,7 @@ async function completeQuiz(
         serviceLevel  = 'Casual sit-down',
         cuisine       = 'Surprise me',
         energy        = 'Moderate',
-        hunger        = 'Moderate',
+        hunger        = 'Full meal',
         distance      = 'Anywhere',
         familiarity   = 'Either',
     } = opts;
@@ -44,9 +44,7 @@ async function completeQuiz(
     const isQuickEasy = /quick/i.test(serviceLevel);
 
     // Each step triggers a Livewire round-trip. We wait for each response before
-    // clicking the next answer so rapid-fire clicks don't race past the DOM update
-    // (steps 4 and 5 — energy and hunger — both have a 'Moderate' button, making
-    // races easy to trigger).
+    // clicking the next answer so rapid-fire clicks don't race past the DOM update.
     let step = waitForLivewire(page);
     await page.getByRole('button', { name: new RegExp(dineInTakeout, 'i') }).click();
     await step;
@@ -193,7 +191,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Full meal/i }).click(); // hunger
         await expect(page.getByText('Step 6 of 7')).toBeVisible();
     });
 
@@ -203,7 +201,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Full meal/i }).click(); // hunger
         await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
         await expect(page.getByText('Step 7 of 7')).toBeVisible();
     });
@@ -255,8 +253,8 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
         await expect(page.getByText(/hunger/i)).toBeVisible();
-        await expect(page.getByRole('button', { name: /Light bite/i })).toBeVisible();
-        await expect(page.getByRole('button', { name: /Very hungry/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Quick bite/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Feast/i })).toBeVisible();
     });
 
     test('step 6 shows the distance question', async ({ page }) => {
@@ -265,7 +263,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Full meal/i }).click(); // hunger
         await expect(page.getByText('How far are you willing to go?')).toBeVisible();
         await expect(page.getByRole('button', { name: /Under 2 mi/i })).toBeVisible();
         await expect(page.getByRole('button', { name: /2–5 mi/i })).toBeVisible();
@@ -279,7 +277,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Full meal/i }).click(); // hunger
         await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
         await expect(page.getByText('Something new or a familiar spot?')).toBeVisible();
         await expect(page.getByRole('button', { name: /Something new/i })).toBeVisible();
@@ -415,7 +413,7 @@ test.describe('guided quiz', () => {
         // the empty state. If a result comes back instead, skip gracefully.
         await completeQuiz(page, {
             energy: 'Lively',
-            hunger: 'Light bite',
+            hunger: 'Quick bite',
             familiarity: 'Something new',
             distance: 'Under 2 mi',
             cuisine: 'Italian',
@@ -452,7 +450,7 @@ test.describe('guided quiz', () => {
         // Get to the empty state by exhausting a very tight filter set.
         await completeQuiz(page, {
             energy: 'Lively',
-            hunger: 'Light bite',
+            hunger: 'Quick bite',
             familiarity: 'Something new',
             distance: 'Under 2 mi',
             cuisine: 'Italian',
@@ -521,7 +519,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click(); // service level
         await page.getByRole('button', { name: /Surprise me/i }).click(); // cuisine
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await page.getByRole('button', { name: /Moderate/i }).click(); // hunger
+        await page.getByRole('button', { name: /Full meal/i }).click(); // hunger
         await page.getByRole('button', { name: /Anywhere/i }).click(); // distance
 
         // Intercept the Livewire resolve request and hold it so the loading

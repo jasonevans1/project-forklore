@@ -4,9 +4,9 @@
 <p class="text-sm text-neutral-500">{{ __('hunger') }}</p>
 <div class="flex flex-col gap-3">
     @foreach ([
-        ['value' => 'light', 'label' => '🥗 Light bite', 'sub' => 'Snack or small plates'],
-        ['value' => 'moderate', 'label' => '🍝 Moderate', 'sub' => 'A solid meal'],
-        ['value' => 'hungry', 'label' => '🥩 Very hungry', 'sub' => 'Big portions, hearty food'],
+        ['value' => 'quick_bite', 'label' => '🥪 Quick bite', 'sub' => 'In and out fast'],
+        ['value' => 'full_meal', 'label' => '🍝 Full meal', 'sub' => 'A solid sit-down meal'],
+        ['value' => 'feast', 'label' => '🥩 Feast', 'sub' => 'Take your time, go big'],
     ] as $opt)
         <button
             wire:click="answer('hunger', '{{ $opt['value'] }}')"
