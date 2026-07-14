@@ -172,11 +172,13 @@ it('Quiz going() creates a Visit with mode_used=quiz', function () {
 
     Livewire::actingAs($this->user)
         ->test('pages::quiz')
+        ->call('answer', 'dineInTakeout', 'either')
+        ->call('answer', 'serviceLevel', 'casual_sit_down')
+        ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'moderate')
         ->call('answer', 'hunger', 'moderate')
-        ->call('answer', 'familiarity', 'either')
         ->call('answer', 'distance', 'anywhere')
-        ->call('answer', 'cuisine', null)
+        ->call('answer', 'familiarity', 'either')
         ->call('going');
 
     expect(
@@ -193,11 +195,13 @@ it('Quiz going() increments visit_count', function () {
 
     Livewire::actingAs($this->user)
         ->test('pages::quiz')
+        ->call('answer', 'dineInTakeout', 'either')
+        ->call('answer', 'serviceLevel', 'casual_sit_down')
+        ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'moderate')
         ->call('answer', 'hunger', 'moderate')
-        ->call('answer', 'familiarity', 'either')
         ->call('answer', 'distance', 'anywhere')
-        ->call('answer', 'cuisine', null)
+        ->call('answer', 'familiarity', 'either')
         ->call('going');
 
     expect($restaurant->fresh()->visit_count)->toBe(2);
@@ -209,11 +213,13 @@ it('Quiz going() stamps last_visited_at', function () {
 
     Livewire::actingAs($this->user)
         ->test('pages::quiz')
+        ->call('answer', 'dineInTakeout', 'either')
+        ->call('answer', 'serviceLevel', 'casual_sit_down')
+        ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'moderate')
         ->call('answer', 'hunger', 'moderate')
-        ->call('answer', 'familiarity', 'either')
         ->call('answer', 'distance', 'anywhere')
-        ->call('answer', 'cuisine', null)
+        ->call('answer', 'familiarity', 'either')
         ->call('going');
 
     expect($restaurant->fresh()->last_visited_at)->not->toBeNull();
@@ -225,11 +231,13 @@ it('Quiz going() redirects to the dashboard', function () {
 
     Livewire::actingAs($this->user)
         ->test('pages::quiz')
+        ->call('answer', 'dineInTakeout', 'either')
+        ->call('answer', 'serviceLevel', 'casual_sit_down')
+        ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'moderate')
         ->call('answer', 'hunger', 'moderate')
-        ->call('answer', 'familiarity', 'either')
         ->call('answer', 'distance', 'anywhere')
-        ->call('answer', 'cuisine', null)
+        ->call('answer', 'familiarity', 'either')
         ->call('going')
         ->assertRedirect(route('dashboard'));
 });

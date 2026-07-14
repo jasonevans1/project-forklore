@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\PatioQuality;
+use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
+use App\Enums\ServiceLevel;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Services\QuizAnswers;
@@ -47,6 +49,8 @@ function neutralAnswers(array $overrides = []): QuizAnswers
         familiarity: $overrides['familiarity'] ?? 'either',
         distance: $overrides['distance'] ?? 'anywhere',
         cuisine: $overrides['cuisine'] ?? null,
+        serviceLevel: $overrides['serviceLevel'] ?? 'casual_sit_down',
+        dineInTakeout: $overrides['dineInTakeout'] ?? 'either',
     );
 }
 
@@ -197,24 +201,20 @@ it('scores a frequently-visited restaurant higher when familiarity=familiar', fu
 // Distance filtering
 // ---------------------------------------------------------------------------
 
-it('excludes restaurants beyond the max distance when distance=nearby', function () {
-    // Within ~1 mile of Des Moines centre.
+it('excludes restaurants beyond 2 miles when distance is under_2_miles', function () {
+    // ~1 mile from Des Moines centre.
     $near = Restaurant::factory()->for($this->user, 'user')->create([
         'lat' => 41.5868,
         'lng' => -93.6250,
     ]);
     // ~20 miles away.
-    $far = Restaurant::factory()->for($this->user, 'user')->create([
+    Restaurant::factory()->for($this->user, 'user')->create([
         'lat' => 41.8000,
         'lng' => -93.6250,
     ]);
 
     $answers = new QuizAnswers(
-        energy: 'moderate',
-        hunger: 'moderate',
-        familiarity: 'either',
-        distance: 'nearby',
-        cuisine: null,
+        distance: 'under_2_miles',
         lat: 41.5868,
         lng: -93.6250,
     );
@@ -224,18 +224,70 @@ it('excludes restaurants beyond the max distance when distance=nearby', function
     expect($result->id)->toBe($near->id);
 });
 
-it('includes all restaurants when distance=anywhere', function () {
+it('excludes restaurants outside the 2 to 5 mile range when distance is 2_to_5_miles', function () {
+    // ~1 mile away — inside 2mi, should be excluded from this bucket.
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.5868,
+        'lng' => -93.6250,
+    ]);
+    // ~3 miles away — inside the 2-5mi bucket.
+    $midRange = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.63,
+        'lng' => -93.6250,
+    ]);
+    // ~20 miles away — outside the 2-5mi bucket.
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.8000,
+        'lng' => -93.6250,
+    ]);
+
+    $answers = new QuizAnswers(
+        distance: '2_to_5_miles',
+        lat: 41.5868,
+        lng: -93.6250,
+    );
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($midRange->id);
+});
+
+it('excludes restaurants outside the 5 to 15 mile range when distance is 5_to_15_miles', function () {
+    // ~1 mile away — inside 5mi, should be excluded from this bucket.
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.5868,
+        'lng' => -93.6250,
+    ]);
+    // ~10 miles away — inside the 5-15mi bucket.
+    $midRange = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.73,
+        'lng' => -93.6250,
+    ]);
+    // ~50 miles away — outside the 5-15mi bucket.
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 42.30,
+        'lng' => -93.6250,
+    ]);
+
+    $answers = new QuizAnswers(
+        distance: '5_to_15_miles',
+        lat: 41.5868,
+        lng: -93.6250,
+    );
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($midRange->id);
+});
+
+it('includes all restaurants regardless of distance when distance is anywhere', function () {
     Restaurant::factory()->for($this->user, 'user')->count(3)->create([
         'lat' => 41.8000,
         'lng' => -93.6250,
     ]);
 
     $answers = new QuizAnswers(
-        energy: 'moderate',
-        hunger: 'moderate',
-        familiarity: 'either',
         distance: 'anywhere',
-        cuisine: null,
         lat: 41.5868,
         lng: -93.6250,
     );
@@ -246,29 +298,31 @@ it('includes all restaurants when distance=anywhere', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Cuisine scoring
+// Cuisine filtering
 // ---------------------------------------------------------------------------
 
-it('scores a restaurant with matching cuisine higher when a cuisine is specified', function () {
-    $italian = Restaurant::factory()->for($this->user, 'user')->create(['cuisine_tags' => ['Italian']]);
-    $mexican = Restaurant::factory()->for($this->user, 'user')->create(['cuisine_tags' => ['Mexican']]);
+it('excludes restaurants with a different primary_cuisine when a cuisine is specified', function () {
+    $italian = Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Italian]);
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Mexican]);
 
-    $answers = neutralAnswers(['cuisine' => 'Italian']);
+    $answers = neutralAnswers(['cuisine' => PrimaryCuisine::Italian->value]);
 
     $result = $this->service->topMatch($this->user, $answers);
 
     expect($result->id)->toBe($italian->id);
 });
 
-it('does not bias by cuisine when cuisine is null (surprise me)', function () {
-    // Both restaurants are equal on all dimensions — service must return one of them.
-    Restaurant::factory()->for($this->user, 'user')->count(2)->create();
+it('includes restaurants regardless of primary_cuisine when cuisine is null (surprise me)', function () {
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Italian]);
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Mexican]);
 
     $answers = neutralAnswers(['cuisine' => null]);
 
-    $result = $this->service->topMatch($this->user, $answers);
+    $winner = $this->service->topMatch($this->user, $answers);
+    $runnerUp = $this->service->runnerUp($this->user, $answers, $winner);
 
-    expect($result)->not->toBeNull();
+    expect($winner)->not->toBeNull()
+        ->and($runnerUp)->not->toBeNull();
 });
 
 // ---------------------------------------------------------------------------
@@ -315,6 +369,206 @@ it('applies no weather modifier when weather is null', function () {
 // ---------------------------------------------------------------------------
 // source=places restaurants are excluded from quiz results
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Dine-in / takeout filtering
+// ---------------------------------------------------------------------------
+
+it('excludes restaurants without dine_in in service_options when dineInTakeout is dine_in', function () {
+    $dineIn = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in', 'takeout'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['takeout'],
+    ]);
+
+    $answers = neutralAnswers(['dineInTakeout' => 'dine_in']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($dineIn->id);
+});
+
+it('excludes restaurants without takeout in service_options when dineInTakeout is takeout', function () {
+    $takeout = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['takeout', 'dine_in'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+    ]);
+
+    $answers = neutralAnswers(['dineInTakeout' => 'takeout']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($takeout->id);
+});
+
+it('includes restaurants regardless of service_options when dineInTakeout is either', function () {
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['takeout'],
+    ]);
+
+    $answers = neutralAnswers(['dineInTakeout' => 'either']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result)->not->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// Service level filtering
+// ---------------------------------------------------------------------------
+
+it('includes only fast_food and fast_casual restaurants when serviceLevel is quick_easy', function () {
+    $fastFood = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FastFood)->create();
+    $fastCasual = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FastCasual)->create();
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+
+    $answers = neutralAnswers(['serviceLevel' => 'quick_easy']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect(in_array($result->id, [$fastFood->id, $fastCasual->id], true))->toBeTrue();
+});
+
+it('includes only casual restaurants when serviceLevel is casual_sit_down', function () {
+    $casual = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create();
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+
+    $answers = neutralAnswers(['serviceLevel' => 'casual_sit_down']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($casual->id);
+});
+
+it('includes only fine_dining restaurants when serviceLevel is special_occasion', function () {
+    $fineDining = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create();
+
+    $answers = neutralAnswers(['serviceLevel' => 'special_occasion']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($fineDining->id);
+});
+
+it('combines dine-in/takeout and service level filters together', function () {
+    $match = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['takeout'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create([
+        'service_options' => ['dine_in'],
+    ]);
+
+    $answers = neutralAnswers(['serviceLevel' => 'casual_sit_down', 'dineInTakeout' => 'dine_in']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($match->id);
+});
+
+it('narrows the final pick using all four filters combined (dine-in/takeout, service level, cuisine, distance)', function () {
+    $baseLat = 41.5868;
+    $baseLng = -93.6250;
+
+    $match = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+        'primary_cuisine' => PrimaryCuisine::Italian,
+        'lat' => $baseLat,
+        'lng' => $baseLng,
+    ]);
+    // Wrong service_options — no dine_in.
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['takeout'],
+        'primary_cuisine' => PrimaryCuisine::Italian,
+        'lat' => $baseLat,
+        'lng' => $baseLng,
+    ]);
+    // Wrong service_level.
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create([
+        'service_options' => ['dine_in'],
+        'primary_cuisine' => PrimaryCuisine::Italian,
+        'lat' => $baseLat,
+        'lng' => $baseLng,
+    ]);
+    // Wrong cuisine.
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+        'primary_cuisine' => PrimaryCuisine::Mexican,
+        'lat' => $baseLat,
+        'lng' => $baseLng,
+    ]);
+    // Wrong distance — ~20 miles away.
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in'],
+        'primary_cuisine' => PrimaryCuisine::Italian,
+        'lat' => 41.8000,
+        'lng' => $baseLng,
+    ]);
+
+    $answers = new QuizAnswers(
+        distance: 'under_2_miles',
+        cuisine: PrimaryCuisine::Italian->value,
+        lat: $baseLat,
+        lng: $baseLng,
+        serviceLevel: 'casual_sit_down',
+        dineInTakeout: 'dine_in',
+    );
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($match->id);
+});
+
+it('does not exclude any restaurant by cuisine when cuisine is null (surprise me)', function () {
+    // The odd-cuisine-out restaurant also has the best-matching vibe tag, so it can
+    // only win if the cuisine filter did not exclude it beforehand.
+    $oddCuisineOut = Restaurant::factory()->for($this->user, 'user')->create([
+        'primary_cuisine' => PrimaryCuisine::Thai,
+        'vibe_tags' => ['lively'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'primary_cuisine' => PrimaryCuisine::Italian,
+        'vibe_tags' => ['quiet'],
+    ]);
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'primary_cuisine' => PrimaryCuisine::Mexican,
+        'vibe_tags' => ['quiet'],
+    ]);
+
+    $answers = neutralAnswers(['cuisine' => null, 'energy' => 'lively']);
+
+    $result = $this->service->topMatch($this->user, $answers);
+
+    expect($result->id)->toBe($oddCuisineOut->id);
+});
+
+it('has no remaining assertions against removed nearby/close distance or cuisine soft-scoring behavior', function () {
+    $testFileContents = file_get_contents(__FILE__);
+    $serviceFileContents = file_get_contents(app_path('Services/QuizService.php'));
+
+    // Built via concatenation so this sweep test doesn't trip over its own source.
+    $forbiddenTerms = [
+        'CUISINE_MATCH'.'_BONUS',
+        "'nea".'rby\'',
+        "'clo".'se\'',
+        'NEARBY'.'_MILES',
+        'CLOSE'.'_MILES',
+    ];
+
+    foreach ($forbiddenTerms as $term) {
+        expect($testFileContents)->not->toContain($term)
+            ->and($serviceFileContents)->not->toContain($term);
+    }
+});
 
 it('excludes source=places restaurants from quiz results', function () {
     $favorite = Restaurant::factory()->for($this->user, 'user')->create([
