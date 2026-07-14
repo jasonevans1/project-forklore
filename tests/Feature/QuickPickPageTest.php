@@ -110,6 +110,63 @@ it('shows a patio tagline when the restaurant has a destination patio and ideal 
         ->assertSee('Perfect patio weather');
 });
 
+it('still shows a weather-aware tagline on the Quick Pick result card after extraction', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'patio_quality' => PatioQuality::Destination,
+        'lat' => 41.58,
+        'lng' => -93.62,
+    ]);
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    // 22 °C = 71.6 °F, no rain — ideal patio weather
+    $this->mock(WeatherService::class)->allows('fetch')->andReturn(new WeatherData(
+        temperature: 22.0,
+        conditions: 'Clear',
+        precipitation: 0.0,
+        windSpeed: 2.0,
+        sunset: CarbonImmutable::now()->addHours(4),
+        units: 'metric',
+    ));
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->set('lat', 41.58)
+        ->set('lng', -93.62)
+        ->call('pick')
+        ->assertSee('Perfect patio weather');
+});
+
+it('still shows a distance label on the Quick Pick result card after extraction', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.60,
+        'lng' => -93.60,
+    ]);
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->set('lat', 41.58)
+        ->set('lng', -93.62)
+        ->call('pick')
+        ->assertSee('mi');
+});
+
+it("still shows no distance label when the user's coordinates are unavailable", function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'lat' => 41.60,
+        'lng' => -93.60,
+    ]);
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->call('pick')
+        ->assertSet('distanceLabel', null);
+});
+
 // ---------------------------------------------------------------------------
 // Going — full pick → going flow
 // ---------------------------------------------------------------------------

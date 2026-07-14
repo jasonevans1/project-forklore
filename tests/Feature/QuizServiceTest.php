@@ -604,3 +604,164 @@ it('excludes source=places restaurants from quiz results', function () {
 
     expect($result->id)->toBe($favorite->id);
 });
+
+// ---------------------------------------------------------------------------
+// filterExclusionCounts
+// ---------------------------------------------------------------------------
+
+it('returns zero for a filter that excludes none of the base pool', function () {
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => ['dine_in', 'takeout'],
+    ]);
+
+    $counts = $this->service->filterExclusionCounts($this->user, neutralAnswers());
+
+    expect($counts['dineInTakeout'])->toBe(0);
+});
+
+it('counts exclusions for the dineInTakeout filter independently of the other filters', function () {
+    Restaurant::factory()->for($this->user, 'user')->create(['service_options' => ['dine_in']]);
+    Restaurant::factory()->for($this->user, 'user')->create(['service_options' => ['takeout']]);
+    Restaurant::factory()->for($this->user, 'user')->create(['service_options' => ['dine_in', 'takeout']]);
+
+    $answers = neutralAnswers(['dineInTakeout' => 'dine_in']);
+
+    $counts = $this->service->filterExclusionCounts($this->user, $answers);
+
+    expect($counts['dineInTakeout'])->toBe(1);
+});
+
+it('counts exclusions for the serviceLevel filter independently of the other filters', function () {
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create();
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FastFood)->create();
+
+    $answers = neutralAnswers(['serviceLevel' => 'casual_sit_down']);
+
+    $counts = $this->service->filterExclusionCounts($this->user, $answers);
+
+    expect($counts['serviceLevel'])->toBe(2);
+});
+
+it('counts exclusions for the cuisine filter independently of the other filters', function () {
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Italian]);
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Mexican]);
+    Restaurant::factory()->for($this->user, 'user')->create(['primary_cuisine' => PrimaryCuisine::Thai]);
+
+    $answers = neutralAnswers(['cuisine' => PrimaryCuisine::Italian->value]);
+
+    $counts = $this->service->filterExclusionCounts($this->user, $answers);
+
+    expect($counts['cuisine'])->toBe(2);
+});
+
+it('counts exclusions for the distance filter independently of the other filters', function () {
+    $baseLat = 41.5868;
+    $baseLng = -93.6250;
+
+    Restaurant::factory()->for($this->user, 'user')->create(['lat' => $baseLat, 'lng' => $baseLng]);
+    Restaurant::factory()->for($this->user, 'user')->create(['lat' => 41.8000, 'lng' => $baseLng]);
+    Restaurant::factory()->for($this->user, 'user')->create(['lat' => null, 'lng' => null]);
+
+    $answers = new QuizAnswers(distance: 'under_2_miles', lat: $baseLat, lng: $baseLng);
+
+    $counts = $this->service->filterExclusionCounts($this->user, $answers);
+
+    expect($counts['distance'])->toBe(2);
+});
+
+it('returns all four filter keys in the result even when some counts are zero', function () {
+    Restaurant::factory()->for($this->user, 'user')->create();
+
+    $counts = $this->service->filterExclusionCounts($this->user, neutralAnswers());
+
+    expect($counts)->toHaveKeys(['dineInTakeout', 'serviceLevel', 'cuisine', 'distance']);
+});
+
+it('measures every filter against the same unfiltered base pool rather than cumulatively', function () {
+    // This restaurant fails BOTH the serviceLevel and dineInTakeout filters. If counts were
+    // cumulative (each filter applied to the previous filter's remaining pool), it could only
+    // be counted against the first filter applied, undercounting the second.
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create([
+        'service_options' => ['takeout'],
+    ]);
+
+    $answers = neutralAnswers(['serviceLevel' => 'casual_sit_down', 'dineInTakeout' => 'dine_in']);
+
+    $counts = $this->service->filterExclusionCounts($this->user, $answers);
+
+    expect($counts['serviceLevel'])->toBe(1)
+        ->and($counts['dineInTakeout'])->toBe(1);
+});
+
+// ---------------------------------------------------------------------------
+// neutralize
+// ---------------------------------------------------------------------------
+
+it('neutralizes dineInTakeout to either', function () {
+    $answers = neutralAnswers(['dineInTakeout' => 'dine_in']);
+
+    $neutralized = $this->service->neutralize($answers, 'dineInTakeout');
+
+    expect($neutralized->dineInTakeout)->toBe('either');
+});
+
+it('neutralizes serviceLevel so no restaurant is excluded by service level', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+
+    $answers = neutralAnswers(['serviceLevel' => 'quick_easy']);
+
+    $neutralized = $this->service->neutralize($answers, 'serviceLevel');
+
+    $counts = $this->service->filterExclusionCounts($this->user, $neutralized);
+
+    expect($counts['serviceLevel'])->toBe(0)
+        ->and($restaurant)->not->toBeNull();
+});
+
+it('neutralizes cuisine to null', function () {
+    $answers = neutralAnswers(['cuisine' => PrimaryCuisine::Italian->value]);
+
+    $neutralized = $this->service->neutralize($answers, 'cuisine');
+
+    expect($neutralized->cuisine)->toBeNull();
+});
+
+it('neutralizes distance to anywhere', function () {
+    $answers = new QuizAnswers(distance: 'under_2_miles', lat: 41.5868, lng: -93.6250);
+
+    $neutralized = $this->service->neutralize($answers, 'distance');
+
+    expect($neutralized->distance)->toBe('anywhere');
+});
+
+it('leaves every other answer field unchanged when neutralizing one field', function () {
+    $answers = new QuizAnswers(
+        energy: 'lively',
+        hunger: 'feast',
+        familiarity: 'new',
+        distance: 'under_2_miles',
+        cuisine: PrimaryCuisine::Italian->value,
+        lat: 41.5868,
+        lng: -93.6250,
+        serviceLevel: 'special_occasion',
+        dineInTakeout: 'dine_in',
+    );
+
+    $neutralized = $this->service->neutralize($answers, 'dineInTakeout');
+
+    expect($neutralized->energy)->toBe('lively')
+        ->and($neutralized->hunger)->toBe('feast')
+        ->and($neutralized->familiarity)->toBe('new')
+        ->and($neutralized->distance)->toBe('under_2_miles')
+        ->and($neutralized->cuisine)->toBe(PrimaryCuisine::Italian->value)
+        ->and($neutralized->lat)->toBe(41.5868)
+        ->and($neutralized->lng)->toBe(-93.6250)
+        ->and($neutralized->serviceLevel)->toBe('special_occasion');
+});
+
+it('throws an InvalidArgumentException for an unrecognized filter field', function () {
+    $answers = neutralAnswers();
+
+    $this->service->neutralize($answers, 'bogusField');
+})->throws(InvalidArgumentException::class);

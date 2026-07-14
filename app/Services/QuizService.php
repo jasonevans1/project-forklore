@@ -8,6 +8,7 @@ use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 
 class QuizService
 {
@@ -59,6 +60,12 @@ class QuizService
         '2_to_5_miles' => [2.0, 5.0],
         '5_to_15_miles' => [5.0, 15.0],
     ];
+
+    /**
+     * Sentinel serviceLevel value that intentionally matches none of the arms in
+     * buildPool()'s serviceLevel match(), so it behaves as "no filter".
+     */
+    private const string NEUTRAL_SERVICE_LEVEL = 'no_preference';
 
     public function __construct(
         private readonly WeatherService $weather,
@@ -136,29 +143,113 @@ class QuizService
 
         // Apply dine-in/takeout filter in PHP — service_options is a JSON array column,
         // and SQLite (the default/test connection) does not support whereJsonContains.
-        if ($answers->dineInTakeout !== 'either') {
-            $restaurants = $restaurants->filter(
-                fn (Restaurant $r) => in_array($answers->dineInTakeout, $r->service_options ?? [], true)
-            )->values();
-        }
+        $restaurants = $restaurants
+            ->reject(fn (Restaurant $r) => $this->excludedByDineInTakeout($r, $answers))
+            ->values();
 
         // Apply distance filter when the user chose a bucket and coordinates are available.
-        if (isset(self::DISTANCE_BUCKETS[$answers->distance]) && $answers->lat !== null && $answers->lng !== null) {
-            [$minMiles, $maxMiles] = self::DISTANCE_BUCKETS[$answers->distance];
-
-            $restaurants = $restaurants->filter(function (Restaurant $r) use ($minMiles, $maxMiles, $answers): bool {
-                if ($r->lat === null || $r->lng === null) {
-                    return false;
-                }
-
-                $distance = $this->distanceMiles((float) $r->lat, (float) $r->lng, $answers->lat, $answers->lng);
-                $passesMin = $minMiles === 0.0 ? $distance >= $minMiles : $distance > $minMiles;
-
-                return $passesMin && $distance <= $maxMiles;
-            })->values();
-        }
+        $restaurants = $restaurants
+            ->reject(fn (Restaurant $r) => $this->excludedByDistance($r, $answers))
+            ->values();
 
         return $restaurants;
+    }
+
+    /**
+     * Report, for each of the 4 hard filters, how many of the user's favorites
+     * that filter alone would exclude from the unfiltered base pool.
+     *
+     * @return array{dineInTakeout: int, serviceLevel: int, cuisine: int, distance: int}
+     */
+    public function filterExclusionCounts(User $user, QuizAnswers $answers): array
+    {
+        $basePool = Restaurant::ownedBy($user)->favorites()->get();
+
+        return [
+            'dineInTakeout' => $basePool->filter(fn (Restaurant $r) => $this->excludedByDineInTakeout($r, $answers))->count(),
+            'serviceLevel' => $basePool->filter(fn (Restaurant $r) => $this->excludedByServiceLevel($r, $answers))->count(),
+            'cuisine' => $basePool->filter(fn (Restaurant $r) => $this->excludedByCuisine($r, $answers))->count(),
+            'distance' => $basePool->filter(fn (Restaurant $r) => $this->excludedByDistance($r, $answers))->count(),
+        ];
+    }
+
+    /**
+     * Return a copy of the given answers with one named filter field reset to
+     * its "no filter" value, without mutating the input.
+     */
+    public function neutralize(QuizAnswers $answers, string $field): QuizAnswers
+    {
+        if (! in_array($field, ['dineInTakeout', 'serviceLevel', 'cuisine', 'distance'], true)) {
+            throw new InvalidArgumentException("Unrecognized filter field: {$field}");
+        }
+
+        return new QuizAnswers(
+            energy: $answers->energy,
+            hunger: $answers->hunger,
+            familiarity: $answers->familiarity,
+            distance: $field === 'distance' ? 'anywhere' : $answers->distance,
+            cuisine: $field === 'cuisine' ? null : $answers->cuisine,
+            lat: $answers->lat,
+            lng: $answers->lng,
+            serviceLevel: $field === 'serviceLevel' ? self::NEUTRAL_SERVICE_LEVEL : $answers->serviceLevel,
+            dineInTakeout: $field === 'dineInTakeout' ? 'either' : $answers->dineInTakeout,
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter predicates
+    // -------------------------------------------------------------------------
+
+    private function excludedByDineInTakeout(Restaurant $r, QuizAnswers $answers): bool
+    {
+        if ($answers->dineInTakeout === 'either') {
+            return false;
+        }
+
+        return ! in_array($answers->dineInTakeout, $r->service_options ?? [], true);
+    }
+
+    private function excludedByServiceLevel(Restaurant $r, QuizAnswers $answers): bool
+    {
+        $allowed = match ($answers->serviceLevel) {
+            'quick_easy' => [ServiceLevel::FastFood, ServiceLevel::FastCasual],
+            'casual_sit_down' => [ServiceLevel::Casual],
+            'nicer_night_out' => [ServiceLevel::UpscaleCasual],
+            'special_occasion' => [ServiceLevel::FineDining],
+            default => null,
+        };
+
+        if ($allowed === null) {
+            return false;
+        }
+
+        return ! in_array($r->service_level, $allowed, true);
+    }
+
+    private function excludedByCuisine(Restaurant $r, QuizAnswers $answers): bool
+    {
+        if ($answers->cuisine === null) {
+            return false;
+        }
+
+        return $r->primary_cuisine?->value !== $answers->cuisine;
+    }
+
+    private function excludedByDistance(Restaurant $r, QuizAnswers $answers): bool
+    {
+        if (! isset(self::DISTANCE_BUCKETS[$answers->distance]) || $answers->lat === null || $answers->lng === null) {
+            return false;
+        }
+
+        if ($r->lat === null || $r->lng === null) {
+            return true;
+        }
+
+        [$minMiles, $maxMiles] = self::DISTANCE_BUCKETS[$answers->distance];
+        $distance = $this->distanceMiles((float) $r->lat, (float) $r->lng, $answers->lat, $answers->lng);
+        $passesMin = $minMiles === 0.0 ? $distance >= $minMiles : $distance > $minMiles;
+
+        return ! ($passesMin && $distance <= $maxMiles);
     }
 
     // -------------------------------------------------------------------------
