@@ -1088,3 +1088,44 @@ it('still shows all 7 question option buttons with unchanged copy after extracti
         ->assertSeeHtml("wire:click=\"answer('familiarity', 'new')\"")
         ->assertSee('🗺️ Something new');
 });
+
+// ---------------------------------------------------------------------------
+// Restaurant result ticket restyle
+// ---------------------------------------------------------------------------
+
+it('renders the result using the restaurant result ticket component', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'cuisine_tags' => ['Thai', 'Noodles'],
+    ]);
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSee('cuisine-tags', false);
+});
+
+it('still shows the skipped-steps message below the result ticket', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'), 'quick_easy')
+        ->call('answer', 'cuisine', null)
+        ->call('answer', 'hunger', 'moderate')
+        ->call('answer', 'distance', 'anywhere')
+        ->assertSee('You picked fast food, so we skipped 2 questions');
+});
+
+it('still shows the going, reject, and runner-up buttons after the restyle', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $this->mock(QuizService::class)->allows('topMatch')->andReturn($restaurant);
+
+    completeAllSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertSeeHtml('wire:click="going"')
+        ->assertSeeHtml('wire:click="reject"')
+        ->assertSeeHtml('wire:click="peekRunnerUp"')
+        ->assertSee('Going ✓')
+        ->assertSee('Not this one')
+        ->assertSee('Show runner-up');
+});

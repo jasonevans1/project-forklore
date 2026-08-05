@@ -42,27 +42,19 @@ new #[Title('Restaurants')] class extends Component {
     @else
         <div class="flex flex-col gap-4">
             @foreach ($this->restaurants as $restaurant)
-                <flux:card class="w-full">
-                    <div class="space-y-3">
-                        <a href="{{ route('restaurants.show', $restaurant) }}" wire:navigate>
-                            <flux:heading size="lg">{{ $restaurant->name }}</flux:heading>
-                        </a>
+                <x-ticket-row :name="$restaurant->name" :href="route('restaurants.show', $restaurant)">
+                    @if (! empty($restaurant->cuisine_tags))
+                        <div class="flex flex-wrap gap-2">
+                            @foreach ($restaurant->cuisine_tags as $tag)
+                                <flux:badge size="sm">{{ $tag }}</flux:badge>
+                            @endforeach
+                        </div>
+                    @endif
 
-                        @if (!empty($restaurant->cuisine_tags))
-                            <div class="flex flex-wrap gap-2">
-                                @foreach ($restaurant->cuisine_tags as $tag)
-                                    <flux:badge size="sm">{{ $tag }}</flux:badge>
-                                @endforeach
-                            </div>
-                        @endif
-
-                        @if ($restaurant->price_level !== null)
-                            <flux:text class="text-neutral-500 dark:text-neutral-400">
-                                {{ str_repeat('$', $restaurant->price_level) }}
-                            </flux:text>
-                        @endif
-                    </div>
-                </flux:card>
+                    @if ($restaurant->price_level !== null)
+                        <span>{{ str_repeat('$', $restaurant->price_level) }}</span>
+                    @endif
+                </x-ticket-row>
             @endforeach
         </div>
     @endif

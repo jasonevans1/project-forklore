@@ -118,3 +118,23 @@ it('shows up to 3 recently added restaurants ordered by newest first', function 
     expect($newestPos)->toBeLessThan($middlePos)
         ->and($middlePos)->toBeLessThan($oldestPos);
 });
+
+it('renders the recently added list using the ticket row component', function () {
+    $user = User::factory()->create();
+
+    Restaurant::factory()->create(['owner_user_id' => $user->id, 'name' => 'My Place']);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->assertSeeHtml('bg-ticket-bg');
+});
+
+it('links each recently added row to the restaurant show page', function () {
+    $user = User::factory()->create();
+
+    $restaurant = Restaurant::factory()->create(['owner_user_id' => $user->id, 'name' => 'My Place']);
+
+    Livewire::actingAs($user)
+        ->test('pages::dashboard')
+        ->assertSeeHtml(route('restaurants.show', $restaurant));
+});

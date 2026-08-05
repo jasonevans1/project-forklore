@@ -220,51 +220,13 @@ new #[Title('Quick Pick')] class extends Component {
             @touchend="onTouchEnd()"
         >
             {{-- Card body --}}
-            <div class="flex flex-1 flex-col justify-center gap-4 px-6 pt-8">
-                <flux:badge size="sm" class="self-start">
-                    {{ __('Quick Pick') }}
-                </flux:badge>
-
-                <flux:heading size="xl" class="text-3xl font-bold leading-tight">
-                    {{ $this->restaurant->name }}
-                </flux:heading>
-
-                {{-- Cuisine tags --}}
-                @if (! empty($this->restaurant->cuisine_tags))
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($this->restaurant->cuisine_tags as $tag)
-                            <flux:badge>{{ $tag }}</flux:badge>
-                        @endforeach
-                    </div>
-                @endif
-
-                {{-- Meta row: price + distance --}}
-                <div class="flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400">
-                    @if ($this->restaurant->price_level !== null)
-                        <span>{{ str_repeat('$', $this->restaurant->price_level) }}</span>
-                    @endif
-
-                    @if ($distanceLabel !== null)
-                        @if ($this->restaurant->price_level !== null)
-                            <span aria-hidden="true">·</span>
-                        @endif
-                        <span>{{ $distanceLabel }}</span>
-                    @endif
-                </div>
-
-                {{-- Weather-aware tagline --}}
-                @if ($tagline)
-                    <flux:text class="text-base italic text-neutral-600 dark:text-neutral-300">
-                        {{ $tagline }}
-                    </flux:text>
-                @endif
-
-                {{-- Address --}}
-                @if ($this->restaurant->address)
-                    <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">
-                        {{ $this->restaurant->address }}
-                    </flux:text>
-                @endif
+            <div class="flex flex-1 flex-col justify-center px-6 pt-8">
+                <x-restaurant-result-ticket
+                    :restaurant="$this->restaurant"
+                    :badge-label="__('Quick Pick')"
+                    :tagline="$tagline"
+                    :distance-label="$distanceLabel"
+                />
             </div>
 
             {{-- Action buttons in the thumb zone --}}
