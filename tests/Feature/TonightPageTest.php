@@ -71,6 +71,32 @@ it('shows the event detail label above the restaurant name', function () {
         ->assertSeeInOrder(['Trivia starts at 7pm', 'The Tap Room']);
 });
 
+it('renders the result using the restaurant result ticket component', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'The Tap Room']);
+
+    $mock = $this->mock(TonightService::class);
+    $mock->allows('pick')->andReturn($restaurant);
+    $mock->allows('eventLabel')->andReturn('Trivia starts at 7pm');
+
+    Livewire::actingAs($this->user)
+        ->test('pages::tonight')
+        ->call('findTonightsPick')
+        ->assertSeeHtml('font-family: var(--font-display);');
+});
+
+it('still shows the event label above the restaurant name after the restyle', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'The Tap Room']);
+
+    $mock = $this->mock(TonightService::class);
+    $mock->allows('pick')->andReturn($restaurant);
+    $mock->allows('eventLabel')->andReturn('Trivia starts at 7pm');
+
+    Livewire::actingAs($this->user)
+        ->test('pages::tonight')
+        ->call('findTonightsPick')
+        ->assertSeeInOrder(['Trivia starts at 7pm', 'The Tap Room']);
+});
+
 it('shows the Going button in the result state', function () {
     $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
 

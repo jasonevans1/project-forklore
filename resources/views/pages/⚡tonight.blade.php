@@ -155,44 +155,12 @@ new #[Title('Something Happening Tonight')] class extends Component {
             @touchend="onTouchEnd()"
         >
             {{-- Card body --}}
-            <div class="flex flex-1 flex-col justify-center gap-4 px-6 pt-8">
-                <flux:badge size="sm" class="self-start">
-                    {{ __('Tonight') }}
-                </flux:badge>
-
-                {{-- Event detail — shown above the restaurant name --}}
-                @if ($eventLabel)
-                    <flux:text class="text-base font-semibold text-zinc-500 dark:text-zinc-400">
-                        {{ $eventLabel }}
-                    </flux:text>
-                @endif
-
-                <flux:heading size="xl" class="text-3xl font-bold leading-tight">
-                    {{ $this->restaurant->name }}
-                </flux:heading>
-
-                {{-- Cuisine tags --}}
-                @if (! empty($this->restaurant->cuisine_tags))
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($this->restaurant->cuisine_tags as $tag)
-                            <flux:badge>{{ $tag }}</flux:badge>
-                        @endforeach
-                    </div>
-                @endif
-
-                {{-- Meta row: price --}}
-                @if ($this->restaurant->price_level !== null)
-                    <div class="text-sm text-neutral-500 dark:text-neutral-400">
-                        <span>{{ str_repeat('$', $this->restaurant->price_level) }}</span>
-                    </div>
-                @endif
-
-                {{-- Address --}}
-                @if ($this->restaurant->address)
-                    <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">
-                        {{ $this->restaurant->address }}
-                    </flux:text>
-                @endif
+            <div class="flex flex-1 flex-col justify-center px-6 pt-8">
+                <x-restaurant-result-ticket
+                    :restaurant="$this->restaurant"
+                    :badge-label="__('Tonight')"
+                    :event-label="$eventLabel"
+                />
             </div>
 
             {{-- Action buttons in the thumb zone --}}

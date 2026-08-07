@@ -5,6 +5,7 @@ use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -157,6 +158,43 @@ it('does not show visits belonging to another user', function () {
     Livewire::actingAs($this->user)
         ->test('pages::history')
         ->assertDontSee('Secret Spot');
+});
+
+// ---------------------------------------------------------------------------
+// Ticket row component
+// ---------------------------------------------------------------------------
+
+it('renders each visit using the ticket row component', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create(['name' => 'Noodle Palace']);
+    Visit::factory()->create([
+        'user_id' => $this->user->id,
+        'restaurant_id' => $restaurant->id,
+        'visited_at' => now(),
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::history')
+        ->assertSeeHtml('bg-ticket-bg');
+});
+
+it("shows an unknown restaurant fallback when the visit's restaurant has been deleted", function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+    $deletedRestaurantId = $restaurant->id;
+    $restaurant->delete();
+
+    // Visits keep restaurant_id even after the restaurant row is gone; simulate that
+    // state by deferring FK enforcement for this insert (never checked, since the
+    // test transaction rolls back rather than commits).
+    DB::statement('PRAGMA defer_foreign_keys = ON');
+    Visit::factory()->create([
+        'user_id' => $this->user->id,
+        'restaurant_id' => $deletedRestaurantId,
+        'visited_at' => now(),
+    ]);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::history')
+        ->assertSee('Unknown restaurant');
 });
 
 // ---------------------------------------------------------------------------

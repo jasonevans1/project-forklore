@@ -304,6 +304,68 @@ it('shows the Going button on the result card', function () {
 });
 
 // ---------------------------------------------------------------------------
+// Result ticket restyle
+// ---------------------------------------------------------------------------
+
+it('renders the champion using the restaurant result ticket component', function () {
+    $restaurants = Restaurant::factory()->for($this->user, 'user')->count(4)->create();
+    $champion = $restaurants[0];
+    $nextRound = [$champion, $restaurants[2]];
+
+    $mock = $this->mock(TournamentService::class);
+    $mock->allows('seed')->andReturn($restaurants->all());
+    $mock->allows('advance')->andReturn($nextRound);
+    $mock->allows('winner')->andReturn($champion);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::tournament')
+        ->call('start')
+        ->call('pick', $restaurants[0]->id)
+        ->call('pick', $restaurants[2]->id)
+        ->call('pick', $champion->id)
+        ->assertSeeHtml('font-family: var(--font-display);');
+});
+
+it('shows the Tournament Champion badge label', function () {
+    $restaurants = Restaurant::factory()->for($this->user, 'user')->count(4)->create();
+    $champion = $restaurants[0];
+    $nextRound = [$champion, $restaurants[2]];
+
+    $mock = $this->mock(TournamentService::class);
+    $mock->allows('seed')->andReturn($restaurants->all());
+    $mock->allows('advance')->andReturn($nextRound);
+    $mock->allows('winner')->andReturn($champion);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::tournament')
+        ->call('start')
+        ->call('pick', $restaurants[0]->id)
+        ->call('pick', $restaurants[2]->id)
+        ->call('pick', $champion->id)
+        ->assertSee('Tournament Champion');
+});
+
+it('still shows the going and play-again buttons after the restyle', function () {
+    $restaurants = Restaurant::factory()->for($this->user, 'user')->count(4)->create();
+    $champion = $restaurants[0];
+    $nextRound = [$champion, $restaurants[2]];
+
+    $mock = $this->mock(TournamentService::class);
+    $mock->allows('seed')->andReturn($restaurants->all());
+    $mock->allows('advance')->andReturn($nextRound);
+    $mock->allows('winner')->andReturn($champion);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::tournament')
+        ->call('start')
+        ->call('pick', $restaurants[0]->id)
+        ->call('pick', $restaurants[2]->id)
+        ->call('pick', $champion->id)
+        ->assertSee('Going')
+        ->assertSee('Play again');
+});
+
+// ---------------------------------------------------------------------------
 // Going flow
 // ---------------------------------------------------------------------------
 

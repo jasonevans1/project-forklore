@@ -25,52 +25,27 @@ new #[Title('Dashboard')] class extends Component {
     {{-- Page heading --}}
     <flux:heading size="xl">{{ __('What are we doing tonight?') }}</flux:heading>
 
-    {{-- Decision mode cards: 2-column grid --}}
+    {{-- Decision mode cards --}}
     <section class="space-y-3">
-        <flux:heading size="lg">{{ __('Pick a mode') }}</flux:heading>
+        <flux:heading size="lg" class="font-display uppercase">{{ __('Pick a mode') }}</flux:heading>
 
-        <div class="grid grid-cols-2 gap-3">
-
-            {{-- Quick Pick --}}
-            <a href="{{ route('pick') }}" wire:navigate
-               class="flex flex-col gap-2 rounded-xl border border-neutral-200 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                <flux:icon name="bolt" class="size-6 text-amber-500" />
-                <flux:heading size="sm">{{ __('Quick Pick') }}</flux:heading>
-                <flux:text class="text-xs text-neutral-500 dark:text-neutral-400">
-                    {{ __('Weather-aware, one-tap pick from your favorites') }}
-                </flux:text>
-            </a>
-
-            {{-- Tonight --}}
-            <a href="{{ route('tonight') }}" wire:navigate
-               class="flex flex-col gap-2 rounded-xl border border-neutral-200 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                <flux:icon name="calendar" class="size-6 text-blue-500" />
-                <flux:heading size="sm">{{ __('Tonight') }}</flux:heading>
-                <flux:text class="text-xs text-neutral-500 dark:text-neutral-400">
-                    {{ __('Find a spot with something happening tonight') }}
-                </flux:text>
-            </a>
-
-            {{-- Quiz --}}
-            <a href="{{ route('quiz') }}" wire:navigate
-               class="flex flex-col gap-2 rounded-xl border border-neutral-200 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                <flux:icon name="question-mark-circle" class="size-6 text-purple-500" />
-                <flux:heading size="sm">{{ __('Guided Quiz') }}</flux:heading>
-                <flux:text class="text-xs text-neutral-500 dark:text-neutral-400">
-                    {{ __('Answer 5 questions to find your best match') }}
-                </flux:text>
-            </a>
-
-            {{-- Tournament --}}
-            <a href="{{ route('tournament') }}" wire:navigate
-               class="flex flex-col gap-2 rounded-xl border border-neutral-200 p-4 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                <flux:icon name="trophy" class="size-6 text-yellow-500" />
-                <flux:heading size="sm">{{ __('Tournament') }}</flux:heading>
-                <flux:text class="text-xs text-neutral-500 dark:text-neutral-400">
-                    {{ __('Head-to-head bracket until one winner remains') }}
-                </flux:text>
-            </a>
-
+        <div class="flex flex-col divide-y divide-dashed divide-ticket-line border-t border-b border-dashed border-ticket-line">
+            @foreach ([
+                ['number' => '01', 'route' => 'pick', 'icon' => 'bolt', 'name' => __('Quick Pick'), 'description' => __('Weather-aware, one-tap pick from your favorites')],
+                ['number' => '02', 'route' => 'tonight', 'icon' => 'calendar', 'name' => __('Tonight'), 'description' => __('Find a spot with something happening tonight')],
+                ['number' => '03', 'route' => 'quiz', 'icon' => 'question-mark-circle', 'name' => __('Guided Quiz'), 'description' => __('Answer 5 questions to find your best match')],
+                ['number' => '04', 'route' => 'tournament', 'icon' => 'trophy', 'name' => __('Tournament'), 'description' => __('Head-to-head bracket until one winner remains')],
+            ] as $mode)
+                <a href="{{ route($mode['route']) }}" wire:navigate
+                   class="flex items-baseline gap-4 py-4 hover:bg-ticket-bg">
+                    <span class="text-sm text-accent font-mono-ticket">{{ $mode['number'] }}</span>
+                    <flux:icon name="{{ $mode['icon'] }}" class="size-5 shrink-0 self-center text-accent" />
+                    <div>
+                        <flux:heading size="sm" class="font-display uppercase">{{ $mode['name'] }}</flux:heading>
+                        <flux:text class="text-xs text-ink/70">{{ $mode['description'] }}</flux:text>
+                    </div>
+                </a>
+            @endforeach
         </div>
     </section>
 
@@ -95,18 +70,15 @@ new #[Title('Dashboard')] class extends Component {
         @else
             <div class="flex flex-col gap-3">
                 @foreach ($this->recentRestaurants as $restaurant)
-                    <a href="{{ route('restaurants.show', $restaurant) }}" wire:navigate
-                       class="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
-                        <div>
-                            <flux:heading size="sm">{{ $restaurant->name }}</flux:heading>
-                            @if (! empty($restaurant->cuisine_tags))
-                                <flux:text class="text-xs text-neutral-500 dark:text-neutral-400">
-                                    {{ implode(', ', $restaurant->cuisine_tags) }}
-                                </flux:text>
-                            @endif
-                        </div>
-                        <flux:icon name="chevron-right" class="size-4 shrink-0 text-neutral-400" />
-                    </a>
+                    <x-ticket-row :name="$restaurant->name" :href="route('restaurants.show', $restaurant)">
+                        @if (! empty($restaurant->cuisine_tags))
+                            {{ implode(', ', $restaurant->cuisine_tags) }}
+                        @endif
+
+                        <x-slot:trailing>
+                            <flux:icon name="chevron-right" class="size-4 shrink-0" />
+                        </x-slot:trailing>
+                    </x-ticket-row>
                 @endforeach
 
                 <flux:button as="link" href="{{ route('restaurants.index') }}" wire:navigate variant="ghost" size="sm" class="self-start">

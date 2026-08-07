@@ -70,3 +70,23 @@ it('shows a link to the create restaurant page', function () {
         ->get(route('restaurants.index'))
         ->assertSee(route('restaurants.create'));
 });
+
+it('renders each restaurant using the ticket row component', function () {
+    $user = User::factory()->create();
+
+    Restaurant::factory()->create(['owner_user_id' => $user->id, 'name' => 'Pasta Palace']);
+
+    $this->actingAs($user)
+        ->get(route('restaurants.index'))
+        ->assertSeeHtml('bg-ticket-bg');
+});
+
+it('links each row to the restaurant show page', function () {
+    $user = User::factory()->create();
+
+    $restaurant = Restaurant::factory()->create(['owner_user_id' => $user->id, 'name' => 'Pasta Palace']);
+
+    $this->actingAs($user)
+        ->get(route('restaurants.index'))
+        ->assertSeeHtml('href="'.route('restaurants.show', $restaurant).'"');
+});

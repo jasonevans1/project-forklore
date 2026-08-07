@@ -58,24 +58,19 @@ new #[Title('History')] class extends Component {
 
                 <ul class="space-y-3">
                     @foreach ($visits as $visit)
-                        <li class="flex items-start justify-between rounded-2xl border border-zinc-200 px-4 py-3 dark:border-zinc-700">
-                            <div class="flex flex-col gap-0.5">
-                                <span class="font-semibold">
-                                    {{ $visit->restaurant?->name ?? __('Unknown restaurant') }}
-                                </span>
-                                <span class="text-xs text-neutral-400">
-                                    {{ $visit->visited_at->format('M j') }}
-                                </span>
-                            </div>
-                            <flux:badge size="sm" class="shrink-0">
-                                {{ match ($visit->mode_used) {
+                        <li>
+                            <x-ticket-row
+                                :name="$visit->restaurant?->name ?? __('Unknown restaurant')"
+                                :badge-label="match ($visit->mode_used) {
                                     ModeUsed::QuickPick  => __('Quick Pick'),
                                     ModeUsed::Quiz       => __('Quiz'),
                                     ModeUsed::Tournament => __('Tournament'),
                                     ModeUsed::Tonight    => __('Tonight'),
                                     default              => $visit->mode_used->value,
-                                } }}
-                            </flux:badge>
+                                }"
+                            >
+                                {{ $visit->visited_at->format('M j') }}
+                            </x-ticket-row>
                         </li>
                     @endforeach
                 </ul>

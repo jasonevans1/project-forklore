@@ -23,16 +23,36 @@
     --color-zinc-900: #171717;
     --color-zinc-950: #0a0a0a;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
+    --color-accent: #8a5220;
+    --color-accent-content: #8a5220;
     --color-accent-foreground: var(--color-white);
+}
+
+/*
+ * Diner-ticket design tokens. Declared as `static` so Tailwind always emits
+ * them even when the only consumers are arbitrary values / inline styles
+ * that its usage scanner can't see (e.g. `var(--color-ticket-bg)`).
+ */
+@theme static {
+    --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+    --font-mono-ticket: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    --color-page: #f7f2e8;
+    --color-ink: #241c12;
+    --color-ticket-bg: #f2e9d6;
+    --color-ticket-ink: #221a10;
+    --color-ticket-line: #c9b98f;
+    --color-ticket-accent: #8a5220;
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        --color-accent: #e3a742;
+        --color-accent-content: #e3a742;
+        --color-accent-foreground: #221a10;
+
+        --color-page: #1c1712;
+        --color-ink: #f2e9d6;
     }
 }
 

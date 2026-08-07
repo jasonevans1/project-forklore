@@ -638,46 +638,12 @@ new #[Title('Guided Quiz')] class extends Component {
     @if ($state === 'result' && $this->restaurant)
         <div class="flex flex-1 flex-col">
             <div class="flex flex-1 flex-col justify-center gap-4 px-6 pt-8">
-                <flux:badge size="sm" class="self-start">
-                    {{ __('Quiz Pick') }}
-                </flux:badge>
-
-                <flux:heading size="xl" class="text-3xl font-bold leading-tight">
-                    {{ $this->restaurant->name }}
-                </flux:heading>
-
-                @if (! empty($this->restaurant->cuisine_tags))
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($this->restaurant->cuisine_tags as $tag)
-                            <flux:badge>{{ $tag }}</flux:badge>
-                        @endforeach
-                    </div>
-                @endif
-
-                <div class="flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400">
-                    @if ($this->restaurant->price_level !== null)
-                        <span>{{ str_repeat('$', $this->restaurant->price_level) }}</span>
-                    @endif
-
-                    @if ($distanceLabel !== null)
-                        @if ($this->restaurant->price_level !== null)
-                            <span aria-hidden="true">·</span>
-                        @endif
-                        <span>{{ $distanceLabel }}</span>
-                    @endif
-                </div>
-
-                @if ($tagline)
-                    <flux:text class="text-base italic text-neutral-600 dark:text-neutral-300">
-                        {{ $tagline }}
-                    </flux:text>
-                @endif
-
-                @if ($this->restaurant->address)
-                    <flux:text class="text-sm text-neutral-500 dark:text-neutral-400">
-                        {{ $this->restaurant->address }}
-                    </flux:text>
-                @endif
+                <x-restaurant-result-ticket
+                    :restaurant="$this->restaurant"
+                    :badge-label="__('Quiz Pick')"
+                    :tagline="$tagline"
+                    :distance-label="$distanceLabel"
+                />
 
                 @if ($this->skippedStepsMessage)
                     <flux:text class="text-sm text-neutral-400 dark:text-neutral-500">

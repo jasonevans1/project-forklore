@@ -2,6 +2,7 @@
 
 use App\Enums\ModeUsed;
 use App\Enums\PatioQuality;
+use App\Enums\RestaurantSource;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
@@ -294,4 +295,46 @@ it('shows the empty state when all restaurants have been rejected', function () 
         ->call('pick')
         ->call('reject')
         ->assertSet('state', 'empty');
+});
+
+// ---------------------------------------------------------------------------
+// Restaurant result ticket restyle
+// ---------------------------------------------------------------------------
+
+it('renders the result using the restaurant result ticket component', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'cuisine_tags' => ['Thai', 'Noodles'],
+    ]);
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->call('pick')
+        ->assertSee('cuisine-tags', false);
+});
+
+it('still shows the save as favorite button for a Places-sourced result', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create([
+        'source' => RestaurantSource::Places,
+    ]);
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->call('pick')
+        ->assertSee('Save as favorite');
+});
+
+it('still shows the going and reject buttons after the restyle', function () {
+    $restaurant = Restaurant::factory()->for($this->user, 'user')->create();
+
+    $this->mock(QuickPickService::class)->allows('pick')->andReturn($restaurant);
+
+    Livewire::actingAs($this->user)
+        ->test('pages::pick')
+        ->call('pick')
+        ->assertSee('Going')
+        ->assertSee('Not this one');
 });

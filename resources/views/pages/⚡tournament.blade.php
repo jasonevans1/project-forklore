@@ -288,32 +288,11 @@ new #[Title('Tournament')] class extends Component {
     {{-- ---------------------------------------------------------------- --}}
     @if ($state === 'result' && $this->winner)
         <div class="flex flex-1 flex-col">
-            <div class="flex flex-1 flex-col justify-center gap-4 px-6 pt-8">
-                <flux:badge size="sm" class="self-start">
-                    {{ __('Tournament Champion') }}
-                </flux:badge>
-
-                <flux:heading size="xl" class="text-3xl font-bold leading-tight">
-                    {{ $this->winner->name }}
-                </flux:heading>
-
-                @if (! empty($this->winner->cuisine_tags))
-                    <div class="flex flex-wrap gap-2">
-                        @foreach ($this->winner->cuisine_tags as $tag)
-                            <flux:badge>{{ $tag }}</flux:badge>
-                        @endforeach
-                    </div>
-                @endif
-
-                <div class="flex items-center gap-3 text-sm text-neutral-500 dark:text-neutral-400">
-                    @if ($this->winner->price_level !== null)
-                        <span>{{ str_repeat('$', $this->winner->price_level) }}</span>
-                    @endif
-                    @if ($this->winner->address)
-                        <span aria-hidden="true">·</span>
-                        <span>{{ $this->winner->address }}</span>
-                    @endif
-                </div>
+            <div class="flex flex-1 flex-col justify-center px-6 pt-8">
+                <x-restaurant-result-ticket
+                    :restaurant="$this->winner"
+                    :badge-label="__('Tournament Champion')"
+                />
             </div>
 
             <div class="flex flex-col gap-3 px-6 pb-12 pt-6">
