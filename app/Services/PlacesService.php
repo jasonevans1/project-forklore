@@ -17,6 +17,26 @@ class PlacesService
     private const QUOTA_TTL_SECONDS = 2 * 24 * 3600; // 2 days (covers day boundary)
 
     /**
+     * Convert Google place types into lowercase cuisine tags, dropping noise types.
+     *
+     * @param  list<string>  $types
+     * @return list<string>
+     */
+    public static function cuisineTagsFromTypes(array $types): array
+    {
+        $noise = ['food', 'restaurant', 'establishment', 'point_of_interest', 'meal_takeaway', 'meal_delivery', 'cafe'];
+
+        return array_values(collect($types)
+            ->reject(fn (string $t): bool => in_array($t, $noise, true))
+            ->map(fn (string $t): string => str_replace('_', ' ', $t))
+            ->map(fn (string $t): string => preg_replace('/ restaurant$/', '', $t) ?? $t)
+            ->map(fn (string $t): string => strtolower($t))
+            ->unique()
+            ->filter()
+            ->all());
+    }
+
+    /**
      * Search restaurants by free-text query.
      *
      * @return array<int, array<string, mixed>>|null Parsed places, or null when quota exceeded / key missing

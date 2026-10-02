@@ -39,6 +39,14 @@ return [
         'key' => env('OPENWEATHER_API_KEY'),
     ],
 
+    'typesafe' => [
+        'key' => env('TYPESAFE_API_KEY'),
+        'model' => env('TYPESAFE_MODEL', 'jev-latest'),
+        'timeout' => (int) env('TYPESAFE_TIMEOUT', 5),
+        'daily_quota' => (int) env('TYPESAFE_DAILY_QUOTA', 10000),
+        'min_confidence' => (float) env('TYPESAFE_MIN_CONFIDENCE', 0.6),
+    ],
+
     'google_places' => [
         'key' => env('GOOGLE_PLACES_API_KEY'),
         'daily_quota' => (int) env('GOOGLE_PLACES_DAILY_QUOTA', 1000),

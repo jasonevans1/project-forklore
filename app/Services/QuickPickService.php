@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\ProfilePlacesRestaurant;
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
 use App\Enums\RestaurantSource;
@@ -9,7 +10,10 @@ use App\Models\HouseholdState;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Visit;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
+
+use function Illuminate\Support\defer;
 
 class QuickPickService
 {
@@ -178,23 +182,47 @@ class QuickPickService
             return null;
         }
 
-        return Restaurant::updateOrCreate(
-            [
-                'owner_user_id' => $user->id,
-                'places_id' => $place['id'],
-            ],
-            [
-                'name' => $place['name'] ?? 'Unknown',
-                'address' => $place['address'] ?? null,
-                'lat' => $place['lat'] ?? null,
-                'lng' => $place['lng'] ?? null,
+        $restaurant = Restaurant::firstOrNew([
+            'owner_user_id' => $user->id,
+            'places_id' => $place['id'],
+        ]);
+
+        if ($restaurant->exists && $restaurant->source !== RestaurantSource::Places) {
+            return $restaurant;
+        }
+
+        if (! $restaurant->exists) {
+            $restaurant->fill([
                 'source' => RestaurantSource::Places,
-                'cuisine_tags' => [],
+                'cuisine_tags' => PlacesService::cuisineTagsFromTypes($place['types'] ?? []),
+                'price_level' => $place['price_level'] ?? null,
                 'vibe_tags' => [],
                 'patio_quality' => PatioQuality::None,
                 'indoor_vibe_when_cold' => IndoorVibe::Neutral,
-            ]
-        );
+            ]);
+        }
+
+        $restaurant->fill([
+            'name' => $place['name'] ?? 'Unknown',
+            'address' => $place['address'] ?? null,
+            'lat' => $place['lat'] ?? null,
+            'lng' => $place['lng'] ?? null,
+        ]);
+
+        try {
+            $restaurant->save();
+        } catch (UniqueConstraintViolationException) {
+            return null;
+        }
+
+        if ($restaurant->profiled_at === null) {
+            defer(
+                fn () => rescue(fn () => app(ProfilePlacesRestaurant::class)->execute($restaurant), report: true),
+                name: "profile-restaurant-{$restaurant->id}",
+            );
+        }
+
+        return $restaurant;
     }
 
     // -------------------------------------------------------------------------
