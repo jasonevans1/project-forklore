@@ -10,3 +10,5 @@ parameters:
         - database/
         - routes/
     level: 7
+    # Read model casts() bodies; their array<string, string> docblocks hide enum/array casts.
+    parseModelCastsMethod: true

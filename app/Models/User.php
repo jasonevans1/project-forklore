@@ -13,6 +13,9 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
+/**
+ * @property list<string>|null $preferred_vibe_tags
+ */
 #[Fillable(['name', 'email', 'password', 'partner_id', 'preferred_vibe_tags', 'allow_repeats'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
@@ -35,16 +38,25 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function partner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'partner_id');
     }
 
+    /**
+     * @return HasMany<Restaurant, $this>
+     */
     public function restaurants(): HasMany
     {
         return $this->hasMany(Restaurant::class, 'owner_user_id');
     }
 
+    /**
+     * @return HasMany<Visit, $this>
+     */
     public function visits(): HasMany
     {
         return $this->hasMany(Visit::class);

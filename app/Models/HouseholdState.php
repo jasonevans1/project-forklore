@@ -70,11 +70,17 @@ class HouseholdState extends Model
     // Relationships
     // -------------------------------------------------------------------------
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function lastPicker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'last_picker_id');
