@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\InterpretEventDescription;
 use App\Concerns\ValidatesEventFields;
 use App\Enums\EventRecurrence;
 use App\Enums\EventType;
@@ -7,6 +8,7 @@ use App\Models\Event;
 use App\Models\Restaurant;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -14,6 +16,8 @@ new #[Title('Add event')] class extends Component {
     use ValidatesEventFields;
 
     public Restaurant $restaurant;
+
+    public string $eventText = '';
 
     public string $title = '';
 
@@ -39,6 +43,52 @@ new #[Title('Add event')] class extends Component {
     {
         $this->authorize('update', $restaurant);
         $this->restaurant = $restaurant;
+    }
+
+    /**
+     * Interpret the free-text description and fill only the fields the user has not set.
+     */
+    public function fillFromDescription(InterpretEventDescription $interpret): void
+    {
+        $this->validateOnly('eventText', ['eventText' => 'required|string|max:500']);
+
+        $result = $interpret->execute($this->eventText);
+
+        if ($this->type === '') {
+            $this->type = $result['type'] ?? '';
+        }
+
+        if ($this->recurrence === EventRecurrence::Weekly->value && $this->day_of_week === null) {
+            $this->recurrence = $result['recurrence'] ?? $this->recurrence;
+        }
+
+        if ($this->recurrence === $result['recurrence']) {
+            $this->day_of_week ??= $result['day_of_week'];
+            $this->specific_date = $this->specific_date === '' ? ($result['specific_date'] ?? '') : $this->specific_date;
+        }
+
+        $this->start_time = $this->start_time === '' ? ($result['start_time'] ?? '') : $this->start_time;
+        $this->end_time = $this->end_time === '' ? ($result['end_time'] ?? '') : $this->end_time;
+
+        if ($this->title === '') {
+            $this->title = Str::limit(trim(strtok($this->eventText, "\n") ?: ''), 255, '');
+        }
+
+        if ($this->description === '') {
+            $this->description = Str::limit($this->eventText, 1000, '');
+        }
+
+        $isIncomplete = $this->type === ''
+            || ($this->needsDayOfWeek() && $this->day_of_week === null)
+            || ($this->needsSpecificDate() && $this->specific_date === '')
+            || $this->start_time === ''
+            || $this->end_time === '';
+
+        if ($isIncomplete) {
+            Flux::toast(variant: 'warning', text: __("Couldn't fill everything — please finish the remaining fields."));
+        } else {
+            Flux::toast(variant: 'success', text: __('Filled in — review and save.'));
+        }
     }
 
     /**
@@ -77,6 +127,20 @@ new #[Title('Add event')] class extends Component {
         </div>
 
         <form wire:submit="save" class="space-y-6" novalidate>
+
+            {{-- Describe the event --}}
+            <div class="space-y-3">
+                <flux:field>
+                    <flux:label>{{ __('Describe the event') }} <span class="text-xs text-neutral-400">({{ __('optional') }})</span></flux:label>
+                    <flux:textarea wire:model="eventText" rows="2" placeholder="{{ __('Wednesday trivia 7–9pm') }}" />
+                    <flux:error name="eventText" />
+                </flux:field>
+
+                <flux:button type="button" wire:click="fillFromDescription" wire:loading.attr="disabled" wire:target="fillFromDescription" class="w-full">
+                    <span wire:loading.remove wire:target="fillFromDescription">{{ __('Fill in for me') }}</span>
+                    <span wire:loading wire:target="fillFromDescription">{{ __('Filling in…') }}</span>
+                </flux:button>
+            </div>
 
             {{-- Title --}}
             <flux:field>
