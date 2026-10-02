@@ -60,16 +60,25 @@ class Restaurant extends Model
         ];
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
     }
 
+    /**
+     * @return HasMany<Visit, $this>
+     */
     public function visits(): HasMany
     {
         return $this->hasMany(Visit::class);
     }
 
+    /**
+     * @return HasMany<Event, $this>
+     */
     public function events(): HasMany
     {
         return $this->hasMany(Event::class);
@@ -77,6 +86,9 @@ class Restaurant extends Model
 
     /**
      * Scope restaurants to a specific owner.
+     *
+     * @param  Builder<Restaurant>  $query
+     * @return Builder<Restaurant>
      */
     public function scopeOwnedBy(Builder $query, User $user): Builder
     {
@@ -85,6 +97,9 @@ class Restaurant extends Model
 
     /**
      * Scope to user-curated favorites only (excludes Places-sourced discoveries).
+     *
+     * @param  Builder<Restaurant>  $query
+     * @return Builder<Restaurant>
      */
     public function scopeFavorites(Builder $query): Builder
     {

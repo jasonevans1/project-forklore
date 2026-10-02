@@ -54,6 +54,18 @@ function neutralAnswers(array $overrides = []): QuizAnswers
     );
 }
 
+/**
+ * A restaurant that differs from its siblings only by visit count, so familiarity
+ * is the only scoring factor (no random vibe, duration or service-level filter).
+ */
+function familiarityCandidate(User $user, int $visitCount): Restaurant
+{
+    return Restaurant::factory()
+        ->for($user, 'user')
+        ->withServiceLevel(ServiceLevel::Casual)
+        ->create(['visit_count' => $visitCount, 'vibe_tags' => [], 'avg_duration_minutes' => 75]);
+}
+
 beforeEach(function () {
     $this->user = User::factory()->create();
     $this->service = app(QuizService::class);
@@ -198,8 +210,8 @@ it('falls back to the full_meal ideal duration for an unrecognized hunger value'
 // ---------------------------------------------------------------------------
 
 it('scores a previously-unvisited restaurant higher when familiarity=new', function () {
-    $fresh = Restaurant::factory()->for($this->user, 'user')->create(['visit_count' => 0]);
-    $visited = Restaurant::factory()->for($this->user, 'user')->create(['visit_count' => 10]);
+    $fresh = familiarityCandidate($this->user, 0);
+    $visited = familiarityCandidate($this->user, 10);
 
     $answers = neutralAnswers(['familiarity' => 'new']);
 
@@ -209,8 +221,8 @@ it('scores a previously-unvisited restaurant higher when familiarity=new', funct
 });
 
 it('scores a frequently-visited restaurant higher when familiarity=familiar', function () {
-    $frequented = Restaurant::factory()->for($this->user, 'user')->create(['visit_count' => 15]);
-    $fresh = Restaurant::factory()->for($this->user, 'user')->create(['visit_count' => 0]);
+    $frequented = familiarityCandidate($this->user, 15);
+    $fresh = familiarityCandidate($this->user, 0);
 
     $answers = neutralAnswers(['familiarity' => 'familiar']);
 
