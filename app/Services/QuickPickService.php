@@ -254,7 +254,7 @@ class QuickPickService
      *
      * @param  Collection<int, array{restaurant: Restaurant, score: int}>  $scored
      */
-    private function pickFromTop(Collection $scored): ?Restaurant
+    private function pickFromTop(Collection $scored): Restaurant
     {
         $maxScore = $scored->max('score');
 
@@ -285,7 +285,7 @@ class QuickPickService
 
         $partner = $user->partner;
 
-        return $partner?->preferred_vibe_tags ?? [];
+        return $partner->preferred_vibe_tags ?? [];
     }
 
     private function resolveWeather(QuickPickFilters $filters): ?WeatherData

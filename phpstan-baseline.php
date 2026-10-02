@@ -38,18 +38,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Livewire/VibePicker.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Method App\\\\Services\\\\QuickPickService\\:\\:pickFromTop\\(\\) never returns null so it can be removed from the return type\\.$#',
-	'identifier' => 'return.unusedType',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Services/QuickPickService.php',
-];
-$ignoreErrors[] = [
-	'message' => '#^Using nullsafe property access "\\?\\-\\>preferred_vibe_tags" on left side of \\?\\? is unnecessary\\. Use \\-\\> instead\\.$#',
-	'identifier' => 'nullsafe.neverNull',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Services/QuickPickService.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Using nullsafe property access "\\?\\-\\>preferred_vibe_tags" on left side of \\?\\? is unnecessary\\. Use \\-\\> instead\\.$#',
 	'identifier' => 'nullsafe.neverNull',
 	'count' => 1,
