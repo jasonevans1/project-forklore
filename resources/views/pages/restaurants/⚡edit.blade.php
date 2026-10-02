@@ -95,7 +95,7 @@ new #[Title('Edit restaurant')] class extends Component {
             'name' => $this->name,
             'address' => $this->address ?: null,
             'cuisine_tags' => $cuisineTags,
-            'vibe_tags' => $this->vibe_tags,
+            'vibe_tags' => array_values(array_unique([...$this->vibe_tags, ...array_intersect(['weather_dependent'], $restaurant->vibe_tags ?? [])])),
             'price_level' => $this->price_level,
             'patio_quality' => $this->patio_quality,
             'indoor_vibe_when_cold' => $this->indoor_vibe_when_cold,

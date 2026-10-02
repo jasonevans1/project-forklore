@@ -8,6 +8,8 @@ use App\Models\User;
 
 class PromotePlacesToFavorite
 {
+    public function __construct(public ProfilePlacesRestaurant $profile) {}
+
     /**
      * Flip a Places-sourced restaurant to a user-owned favorite.
      *
@@ -20,6 +22,8 @@ class PromotePlacesToFavorite
         if ($restaurant->source !== RestaurantSource::Places) {
             return;
         }
+
+        $this->profile->execute($restaurant);
 
         $restaurant->update([
             'source' => RestaurantSource::Favorite,

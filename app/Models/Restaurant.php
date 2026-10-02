@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'owner_user_id',
+    'profiled_at',
     'name',
     'address',
     'lat',
@@ -54,6 +55,7 @@ class Restaurant extends Model
             'patio_quality' => PatioQuality::class,
             'indoor_vibe_when_cold' => IndoorVibe::class,
             'last_visited_at' => 'datetime',
+            'profiled_at' => 'datetime',
             'service_level' => ServiceLevel::class,
             'service_options' => 'array',
             'primary_cuisine' => PrimaryCuisine::class,

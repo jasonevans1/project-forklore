@@ -499,3 +499,22 @@ it('still returns id, name, address, types, and rating', function () {
         ->toHaveKey('types', ['restaurant', 'food'])
         ->toHaveKey('rating', 4.3);
 });
+
+it('maps Google place types to lowercase cuisine tags without the restaurant suffix', function () {
+    expect(PlacesService::cuisineTagsFromTypes(['Italian_restaurant', 'sushi_restaurant']))
+        ->toBe(['italian', 'sushi']);
+});
+
+it('removes noise place types such as establishment and point_of_interest', function () {
+    expect(PlacesService::cuisineTagsFromTypes(['restaurant', 'food', 'establishment', 'point_of_interest', 'meal_takeaway', 'meal_delivery', 'cafe', 'bar']))
+        ->toBe(['bar']);
+});
+
+it('returns unique cuisine tags as a list', function () {
+    expect(PlacesService::cuisineTagsFromTypes(['bar', 'pizza_restaurant', 'bar', 'pizza']))
+        ->toBe(['bar', 'pizza']);
+});
+
+it('returns an empty list when every type is noise', function () {
+    expect(PlacesService::cuisineTagsFromTypes(['restaurant', 'food']))->toBe([]);
+});

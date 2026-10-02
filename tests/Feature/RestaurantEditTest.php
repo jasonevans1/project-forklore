@@ -404,3 +404,19 @@ it('does not overwrite source or visit count on save', function () {
     expect($fresh->source)->toBe(RestaurantSource::Favorite)
         ->and($fresh->visit_count)->toBe(5);
 });
+
+it('preserves the weather_dependent vibe tag when a restaurant is saved from the edit screen', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $restaurant = Restaurant::factory()->create([
+        'owner_user_id' => $user->id,
+        'cuisine_tags' => ['Italian'],
+        'vibe_tags' => ['lively', 'weather_dependent'],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($restaurant->refresh()->vibe_tags)->toBe(['lively', 'weather_dependent']);
+});

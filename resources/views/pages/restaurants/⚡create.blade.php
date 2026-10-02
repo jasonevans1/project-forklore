@@ -77,7 +77,7 @@ new #[Title('Add restaurant')] class extends Component {
         $this->lat = isset($place['lat']) ? (float) $place['lat'] : null;
         $this->lng = isset($place['lng']) ? (float) $place['lng'] : null;
         $this->places_id = $place['id'] ?? null;
-        $this->cuisine_tags = $this->mapTypes($place['types'] ?? []);
+        $this->cuisine_tags = implode(', ', PlacesService::cuisineTagsFromTypes($place['types'] ?? []));
 
         $this->activeTab = 'manual';
     }
@@ -159,26 +159,6 @@ new #[Title('Add restaurant')] class extends Component {
             ->filter()
             ->values()
             ->all();
-    }
-
-    /**
-     * Map Google Places types array to a comma-separated cuisine_tags string.
-     * Strips noise types, removes underscores, strips trailing " restaurant" suffix.
-     *
-     * @param  list<string>  $types
-     */
-    private function mapTypes(array $types): string
-    {
-        $noise = ['food', 'restaurant', 'establishment', 'point_of_interest', 'meal_takeaway', 'meal_delivery', 'cafe'];
-
-        return collect($types)
-            ->reject(fn (string $t): bool => in_array($t, $noise, true))
-            ->map(fn (string $t): string => str_replace('_', ' ', $t))
-            ->map(fn (string $t): string => preg_replace('/ restaurant$/', '', $t) ?? $t)
-            ->map(fn (string $t): string => strtolower($t))
-            ->unique()
-            ->filter()
-            ->implode(', ');
     }
 }; ?>
 

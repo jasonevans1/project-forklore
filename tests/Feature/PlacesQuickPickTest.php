@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\ProfilePlacesRestaurant;
+use App\Enums\PatioQuality;
 use App\Enums\RestaurantSource;
 use App\Models\Restaurant;
 use App\Models\User;
@@ -15,7 +17,11 @@ uses(RefreshDatabase::class);
 const PLACES_QP_LAT = 41.58;
 const PLACES_QP_LNG = -93.62;
 
-/** A minimal Places API result representing a single restaurant. */
+/**
+ * A minimal Places API result representing a single restaurant.
+ *
+ * @return array{id: string, name: string, address: string, types: list<string>, rating: float, lat: float, lng: float}
+ */
 function makePlacesResult(string $placeId = 'gplace_001', string $name = 'Places Bistro'): array
 {
     return [
@@ -102,7 +108,7 @@ it('calls Places nearbySearch when the favorites pool is empty', function () {
 it('calls Places with the lat/lng from the filters', function () {
     $this->placesMock->expects('nearbySearch')
         ->once()
-        ->withArgs(fn ($lat, $lng) => $lat === PLACES_QP_LAT && $lng === PLACES_QP_LNG)
+        ->withArgs(fn (mixed $lat, mixed $lng): bool => $lat === PLACES_QP_LAT && $lng === PLACES_QP_LNG)
         ->andReturn([]);
 
     $this->service->pick($this->user, $this->filtersWithLocation);
@@ -269,4 +275,136 @@ it('can return a Places result when it is the only candidate after the pool is e
 
     expect($result)->not->toBeNull()
         ->and($result->name)->toBe('Only Option');
+});
+
+// ---------------------------------------------------------------------------
+// Deferred profiling
+// ---------------------------------------------------------------------------
+
+it("keeps an existing places restaurant's patio quality, vibe tags and cuisine on a later search", function () {
+    $existing = Restaurant::factory()->for($this->user, 'user')->create([
+        'source' => RestaurantSource::Places,
+        'places_id' => 'gplace_keep',
+        'name' => 'Old Name',
+        'patio_quality' => PatioQuality::Destination,
+        'vibe_tags' => ['cozy'],
+        'cuisine_tags' => ['thai'],
+        'profiled_at' => now(),
+    ]);
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_keep', 'New Name')]);
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+
+    $existing->refresh();
+    expect($existing->name)->toBe('New Name')
+        ->and($existing->patio_quality)->toBe(PatioQuality::Destination)
+        ->and($existing->vibe_tags)->toBe(['cozy'])
+        ->and($existing->cuisine_tags)->toBe(['thai']);
+});
+
+it('stores cuisine tags mapped from place types on a new places restaurant', function () {
+    $place = ['types' => ['thai_restaurant', 'restaurant']] + makePlacesResult('gplace_cuisine');
+    $this->placesMock->allows('nearbySearch')->andReturn([$place]);
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+
+    expect(Restaurant::where('places_id', 'gplace_cuisine')->first()->cuisine_tags)
+        ->toBe(['thai']);
+});
+
+it('schedules profiling for a new unprofiled places restaurant', function () {
+    $this->withoutDefer();
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_new')]);
+    $this->mock(ProfilePlacesRestaurant::class)
+        ->expects('execute')->once()
+        ->withArgs(fn (Restaurant $restaurant): bool => $restaurant->places_id === 'gplace_new');
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+});
+
+it('does not schedule profiling for an already profiled places restaurant', function () {
+    $this->withoutDefer();
+    Restaurant::factory()->for($this->user, 'user')->create([
+        'source' => RestaurantSource::Places,
+        'places_id' => 'gplace_done',
+        'profiled_at' => now(),
+    ]);
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_done')]);
+    $this->mock(ProfilePlacesRestaurant::class)->expects('execute')->never();
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+});
+
+it('returns a pick before deferred profiling runs', function () {
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_late')]);
+    $this->mock(ProfilePlacesRestaurant::class)->expects('execute')->never();
+
+    $result = $this->service->pick($this->user, $this->filtersWithLocation);
+
+    expect($result->places_id)->toBe('gplace_late');
+});
+
+it('still returns a pick when Jev is unavailable', function () {
+    $this->withoutDefer();
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_nojev')]);
+
+    $result = $this->service->pick($this->user, $this->filtersWithLocation);
+
+    expect($result->places_id)->toBe('gplace_nojev')
+        ->and($result->profiled_at)->toBeNull();
+});
+
+it('does not modify or re-source a promoted favorite returned again by a nearby search', function () {
+    $this->withoutDefer();
+    $fav = Restaurant::factory()->for($this->user, 'user')->create([
+        'source' => RestaurantSource::Favorite,
+        'places_id' => 'gplace_fav',
+        'name' => 'My Fav',
+        'profiled_at' => null,
+    ]);
+    $this->placesMock->allows('nearbySearch')->andReturn([makePlacesResult('gplace_fav', 'Renamed')]);
+    $this->mock(ProfilePlacesRestaurant::class)->expects('execute')->never();
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+
+    $fav->refresh();
+    expect($fav->name)->toBe('My Fav')
+        ->and($fav->source)->toBe(RestaurantSource::Favorite);
+});
+
+it('skips a place already stored for another user instead of failing', function () {
+    $other = User::factory()->create();
+    Restaurant::factory()->for($other, 'user')->create([
+        'source' => RestaurantSource::Places,
+        'places_id' => 'gplace_taken',
+    ]);
+    $this->placesMock->allows('nearbySearch')->andReturn([
+        makePlacesResult('gplace_taken'),
+        makePlacesResult('gplace_free', 'Free One'),
+    ]);
+
+    $result = $this->service->pick($this->user, $this->filtersWithLocation);
+
+    expect($result->places_id)->toBe('gplace_free');
+});
+
+it('keeps profiling the remaining restaurants when one deferred profile throws', function () {
+    $this->withoutDefer();
+    $this->placesMock->allows('nearbySearch')->andReturn([
+        makePlacesResult('gplace_a', 'A'),
+        makePlacesResult('gplace_b', 'B'),
+    ]);
+    $profiled = [];
+    $this->mock(ProfilePlacesRestaurant::class)
+        ->allows('execute')
+        ->andReturnUsing(function (Restaurant $restaurant) use (&$profiled): void {
+            $profiled[] = $restaurant->places_id;
+            if ($restaurant->places_id === 'gplace_a') {
+                throw new RuntimeException('database is locked');
+            }
+        });
+
+    $this->service->pick($this->user, $this->filtersWithLocation);
+
+    expect($profiled)->toBe(['gplace_a', 'gplace_b']);
 });
