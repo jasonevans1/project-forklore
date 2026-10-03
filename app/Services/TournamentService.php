@@ -32,7 +32,7 @@ class TournamentService
 
         $size = $this->bracketSize($pool->count());
 
-        return $pool->shuffle()->take($size)->values()->all();
+        return array_values($pool->shuffle()->take($size)->all());
     }
 
     /**
@@ -44,10 +44,11 @@ class TournamentService
      */
     public function advance(array $bracket, array $winnerIds): array
     {
-        return collect($bracket)
-            ->filter(fn (Restaurant $r) => in_array($r->id, $winnerIds, true))
-            ->values()
-            ->all();
+        return array_values(
+            collect($bracket)
+                ->filter(fn (Restaurant $r) => in_array($r->id, $winnerIds, true))
+                ->all()
+        );
     }
 
     /**
