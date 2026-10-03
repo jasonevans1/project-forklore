@@ -1,10 +1,12 @@
 <?php
 
+use App\Actions\InterpretEventDescription;
 use App\Enums\EventRecurrence;
 use App\Enums\EventType;
 use App\Models\Event;
 use App\Models\Restaurant;
 use App\Models\User;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 it('requires a title to create an event', function () {
@@ -176,9 +178,9 @@ it('saves a one-off event with a specific date', function () {
         ->assertRedirect(route('restaurants.events.index', $restaurant));
 
     $event = Event::where('title', 'Valentine\'s Prix Fixe')->firstOrFail();
-    expect($event->specific_date->toDateString())->toBe('2027-02-14');
-    expect($event->recurrence)->toBe(EventRecurrence::OneOff);
-    expect($event->restaurant_id)->toBe($restaurant->id);
+    expect($event->specific_date->toDateString())->toBe('2027-02-14')
+        ->and($event->recurrence)->toBe(EventRecurrence::OneOff)
+        ->and($event->restaurant_id)->toBe($restaurant->id);
 });
 
 it('sets the owner to the authenticated user on save', function () {
@@ -249,4 +251,112 @@ it('forbids a non-owner from creating an event for another user\'s restaurant', 
     $this->actingAs($other)
         ->get(route('restaurants.events.create', $restaurant))
         ->assertForbidden();
+});
+
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function fillInForMe(array $overrides = []): Testable
+{
+    $user = User::factory()->create();
+    $restaurant = Restaurant::factory()->create(['owner_user_id' => $user->id]);
+
+    test()->mock(InterpretEventDescription::class)
+        ->shouldReceive('execute')
+        ->andReturn(array_merge([
+            'type' => 'trivia',
+            'recurrence' => 'weekly',
+            'day_of_week' => 3,
+            'specific_date' => null,
+            'start_time' => '19:00',
+            'end_time' => '21:00',
+        ], $overrides));
+
+    return Livewire::actingAs($user)
+        ->test('pages::restaurants.events.create', ['restaurant' => $restaurant])
+        ->set('eventText', 'Wednesday trivia 7-9pm');
+}
+
+it('fills type, recurrence, day and times from the description', function () {
+    fillInForMe()
+        ->call('fillFromDescription')
+        ->assertSet('type', 'trivia')
+        ->assertSet('recurrence', 'weekly')
+        ->assertSet('day_of_week', 3)
+        ->assertSet('start_time', '19:00')
+        ->assertSet('end_time', '21:00')
+        ->assertDispatched(
+            'toast-show',
+            fn (string $name, array $params): bool => ($params['dataset']['variant'] ?? null) === 'success',
+        );
+});
+
+it('does not overwrite fields the user already filled', function () {
+    fillInForMe()
+        ->set('type', 'bingo')
+        ->set('start_time', '18:00')
+        ->call('fillFromDescription')
+        ->assertSet('type', 'bingo')
+        ->assertSet('start_time', '18:00')
+        ->assertSet('end_time', '21:00');
+});
+
+it('does not copy the day into a recurrence the user chose that differs from the interpreted one', function () {
+    fillInForMe()
+        ->set('recurrence', 'monthly')
+        ->call('fillFromDescription')
+        ->assertSet('recurrence', 'monthly')
+        ->assertSet('day_of_week', null);
+});
+
+it('keeps weekly recurrence when the user already picked a weekday', function () {
+    fillInForMe(['recurrence' => 'monthly', 'day_of_week' => 15])
+        ->set('day_of_week', 2)
+        ->call('fillFromDescription')
+        ->assertSet('recurrence', 'weekly')
+        ->assertSet('day_of_week', 2);
+});
+
+it('sets the title from the first line of the description when the title is empty', function () {
+    fillInForMe()
+        ->set('eventText', "  Wednesday trivia  \nbring friends")
+        ->call('fillFromDescription')
+        ->assertSet('title', 'Wednesday trivia');
+});
+
+it('copies the description text into the description field when empty', function () {
+    fillInForMe()
+        ->call('fillFromDescription')
+        ->assertSet('description', 'Wednesday trivia 7-9pm');
+});
+
+it('shows a warning toast when some fields could not be filled', function () {
+    fillInForMe(['start_time' => null])
+        ->call('fillFromDescription')
+        ->assertSet('start_time', '')
+        ->assertDispatched(
+            'toast-show',
+            fn (string $name, array $params): bool => ($params['dataset']['variant'] ?? null) === 'warning',
+        );
+});
+
+it('requires description text before filling in', function () {
+    fillInForMe()
+        ->set('eventText', '')
+        ->call('fillFromDescription')
+        ->assertHasErrors(['eventText'])
+        ->assertHasNoErrors(['title', 'type']);
+});
+
+it('saves an event after filling in from the description', function () {
+    fillInForMe()
+        ->call('fillFromDescription')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('events', [
+        'title' => 'Wednesday trivia 7-9pm',
+        'type' => 'trivia',
+        'day_of_week' => 3,
+    ]);
 });
