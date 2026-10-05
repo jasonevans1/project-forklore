@@ -44,18 +44,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Services/QuizService.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Method App\\\\Services\\\\TournamentService\\:\\:advance\\(\\) should return list\\<App\\\\Models\\\\Restaurant\\> but returns array\\<int, App\\\\Models\\\\Restaurant\\>\\.$#',
-	'identifier' => 'return.type',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Services/TournamentService.php',
-];
-$ignoreErrors[] = [
-	'message' => '#^Method App\\\\Services\\\\TournamentService\\:\\:seed\\(\\) should return list\\<App\\\\Models\\\\Restaurant\\> but returns array\\<int, App\\\\Models\\\\Restaurant\\>\\.$#',
-	'identifier' => 'return.type',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Services/TournamentService.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Parameter \\#1 \\$string of function rtrim expects string, bool\\|string given\\.$#',
 	'identifier' => 'argument.type',
 	'count' => 1,
