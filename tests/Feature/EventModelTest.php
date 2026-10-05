@@ -481,6 +481,8 @@ it('occursOn returns false on the wrong day for a midnight-crossing weekly event
 // ---------------------------------------------------------------------------
 
 it('isActiveNow returns true when the event occurs at the current time', function () {
+    // Midday, so the now ± 1 hour window never crosses midnight.
+    $this->travelTo(Carbon::parse('2026-06-03 12:00:00'));
     $now = Carbon::now();
 
     $event = new Event;
@@ -494,6 +496,8 @@ it('isActiveNow returns true when the event occurs at the current time', functio
 });
 
 it('isActiveNow returns false when the event is inactive', function () {
+    // Midday, so the now ± 1 hour window never crosses midnight.
+    $this->travelTo(Carbon::parse('2026-06-03 12:00:00'));
     $now = Carbon::now();
 
     $event = new Event;
