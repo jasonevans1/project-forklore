@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Actions\ScoreQuizFit;
 use App\Enums\PatioQuality;
 use App\Enums\ServiceLevel;
 use App\Models\HouseholdState;
@@ -43,6 +44,12 @@ class QuizService
     /** Bonus applied when a restaurant matches the partner's preferred vibe tags. */
     private const int PARTNER_PREF_BOOST = 25;
 
+    /** Maximum bonus for a Jev "great fit". */
+    private const int JEV_FIT_BONUS = 40;
+
+    /** Candidates sent to Jev, highest deterministic score first. */
+    private const int JEV_FIT_CANDIDATES = 20;
+
     /** Ideal patio lower bound (°F). */
     private const float PATIO_BOOST_MIN_F = 65.0;
 
@@ -69,6 +76,7 @@ class QuizService
 
     public function __construct(
         private readonly WeatherService $weather,
+        private readonly ScoreQuizFit $scoreQuizFit,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -88,7 +96,7 @@ class QuizService
         }
 
         $resolvedWeather = $weather ?? $this->resolveWeather($answers);
-        $scored = $this->scoreAll($pool, $answers, $resolvedWeather, $user);
+        $scored = $this->applyFitBonus($this->scoreAll($pool, $answers, $resolvedWeather, $user), $answers, $resolvedWeather);
 
         return $scored->sortByDesc('score')->first()['restaurant'];
     }
@@ -99,18 +107,17 @@ class QuizService
      */
     public function runnerUp(User $user, QuizAnswers $answers, Restaurant $winner, ?WeatherData $weather = null): ?Restaurant
     {
-        $pool = $this->buildPool($user, $answers)->filter(
-            fn (Restaurant $r) => $r->id !== $winner->id
-        )->values();
+        $pool = $this->buildPool($user, $answers);
 
         if ($pool->isEmpty()) {
             return null;
         }
 
         $resolvedWeather = $weather ?? $this->resolveWeather($answers);
-        $scored = $this->scoreAll($pool, $answers, $resolvedWeather, $user);
+        $scored = $this->applyFitBonus($this->scoreAll($pool, $answers, $resolvedWeather, $user), $answers, $resolvedWeather)
+            ->reject(fn (array $entry): bool => $entry['restaurant']->id === $winner->id);
 
-        return $scored->sortByDesc('score')->first()['restaurant'];
+        return $scored->sortByDesc('score')->first()['restaurant'] ?? null;
     }
 
     // -------------------------------------------------------------------------
@@ -324,6 +331,36 @@ class QuizService
 
             return ['restaurant' => $r, 'score' => $score];
         });
+    }
+
+    /**
+     * Add the Jev fit bonus to the top candidates, keeping the original order so ties resolve as before.
+     *
+     * @param  Collection<int, array{restaurant: Restaurant, score: int}>  $scored
+     * @return Collection<int, array{restaurant: Restaurant, score: int}>
+     */
+    private function applyFitBonus(Collection $scored, QuizAnswers $answers, ?WeatherData $weather): Collection
+    {
+        if ($scored->count() < 2) {
+            return $scored;
+        }
+
+        $candidates = $scored
+            ->sort(fn (array $a, array $b): int => [$b['score'], $a['restaurant']->id] <=> [$a['score'], $b['restaurant']->id])
+            ->take(self::JEV_FIT_CANDIDATES)
+            ->map(fn (array $entry): Restaurant => $entry['restaurant'])
+            ->values();
+
+        $fits = $this->scoreQuizFit->execute($answers, $candidates, $weather);
+
+        if ($fits === []) {
+            return $scored;
+        }
+
+        return $scored->map(fn (array $entry): array => [
+            'restaurant' => $entry['restaurant'],
+            'score' => $entry['score'] + (int) round(($fits[$entry['restaurant']->id] ?? 0.0) * self::JEV_FIT_BONUS),
+        ]);
     }
 
     // -------------------------------------------------------------------------

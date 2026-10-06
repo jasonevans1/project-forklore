@@ -13,14 +13,18 @@ class JevService
 
     private const VALUE_TYPES = ['choice', 'noul', 'score'];
 
+    /** Seconds an identical request is not retried after a failure. */
+    private const FAILURE_BACKOFF_SECONDS = 60;
+
     /**
      * Ask Jev typed questions about some state and return the confident answers.
      *
      * @param  array<string, mixed>|string  $state
      * @param  array<string, array{type: string, instructions: string, criteria?: array<int|string, string|null>}>  $questions
+     * @param  float|null  $minConfidence  Overrides `services.typesafe.min_confidence` for this call (e.g. 0.0 to weight answers by confidence instead of dropping them)
      * @return array<string, array{type: string, value: string|float, confidence: float}>|null Null when no API key is configured
      */
-    public function ask(array|string $state, array $questions): ?array
+    public function ask(array|string $state, array $questions, ?float $minConfidence = null): ?array
     {
         $key = config('services.typesafe.key');
 
@@ -34,7 +38,7 @@ class JevService
         $answers = Cache::get($cacheKey);
 
         if ($answers === null) {
-            if ($this->isQuotaExceeded()) {
+            if (Cache::has($cacheKey.':failed') || $this->isQuotaExceeded()) {
                 return null;
             }
 
@@ -44,10 +48,14 @@ class JevService
                     ->acceptJson()
                     ->post(self::ENDPOINT, ['state' => $state, 'model' => $model, 'questions' => $questions]);
             } catch (ConnectionException) {
+                Cache::put($cacheKey.':failed', true, self::FAILURE_BACKOFF_SECONDS);
+
                 return null;
             }
 
             if ($response->failed()) {
+                Cache::put($cacheKey.':failed', true, self::FAILURE_BACKOFF_SECONDS);
+
                 if (in_array($response->status(), [401, 422], true)) {
                     Log::warning('Jev request failed', ['status' => $response->status()]);
                 }
@@ -60,7 +68,7 @@ class JevService
             $this->incrementQuota();
         }
 
-        return $this->parseAnswers($answers);
+        return $this->parseAnswers($answers, $minConfidence ?? (float) config('services.typesafe.min_confidence'));
     }
 
     private function quotaKey(): string
@@ -83,7 +91,7 @@ class JevService
      * @param  array<string, mixed>  $answers
      * @return array<string, array{type: string, value: string|float, confidence: float}>
      */
-    private function parseAnswers(array $answers): array
+    private function parseAnswers(array $answers, float $minConfidence): array
     {
         $parsed = [];
 
@@ -97,7 +105,7 @@ class JevService
             $confidence = $answer['confidence'] ?? null;
             $value = $answer[$type] ?? null;
 
-            if (! is_numeric($confidence) || $confidence < config('services.typesafe.min_confidence') || $value === null) {
+            if (! is_numeric($confidence) || $confidence < $minConfidence || $value === null) {
                 continue;
             }
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ScoreQuizFit;
 use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
 use App\Enums\RestaurantSource;
@@ -11,6 +12,8 @@ use App\Services\QuizService;
 use App\Services\WeatherData;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
 
@@ -777,3 +780,138 @@ it('throws an InvalidArgumentException for an unrecognized filter field', functi
 
     $this->service->neutralize($answers, 'bogusField');
 })->throws(InvalidArgumentException::class);
+
+// ---------------------------------------------------------------------------
+// Jev fit bonus
+// ---------------------------------------------------------------------------
+
+it('adds the Jev fit bonus to the deterministic score', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    $fresh = familiarityCandidate($this->user, 0);
+
+    // familiar: visited leads by 30; a half fit (+20) is not enough, a full fit (+40) is.
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->twice()->andReturn(
+        [$visited->id => 0.0, $fresh->id => 0.5],
+        [$visited->id => 0.0, $fresh->id => 1.0],
+    );
+    $answers = neutralAnswers(['familiarity' => 'familiar']);
+
+    expect(app(QuizService::class)->topMatch($this->user, $answers)->id)->toBe($visited->id)
+        ->and(app(QuizService::class)->topMatch($this->user, $answers)->id)->toBe($fresh->id);
+});
+
+it('picks a restaurant Jev rates a great fit over one with a slightly higher deterministic score', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    $fresh = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([$visited->id => 0.0, $fresh->id => 1.0]);
+
+    $winner = app(QuizService::class)->topMatch($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($winner->id)->toBe($fresh->id);
+});
+
+it('keeps deterministic scoring when Jev returns no fit scores', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([]);
+
+    $winner = app(QuizService::class)->topMatch($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($winner->id)->toBe($visited->id);
+});
+
+it('sends only the top 20 candidates by deterministic score to Jev', function () {
+    $strong = collect(range(1, 20))->map(fn () => familiarityCandidate($this->user, 10));
+    $weak = collect(range(1, 3))->map(fn () => familiarityCandidate($this->user, 0));
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->once()
+        ->withArgs(fn ($answers, $candidates) => $candidates->pluck('id')->sort()->values()->all()
+                === $strong->pluck('id')->sort()->values()->all()
+            && $candidates->pluck('id')->intersect($weak->pluck('id'))->isEmpty())
+        ->andReturn([]);
+
+    app(QuizService::class)->topMatch($this->user, neutralAnswers(['familiarity' => 'familiar']));
+});
+
+it('sends the same candidates to Jev for runnerUp as for topMatch', function () {
+    familiarityCandidate($this->user, 10);
+    familiarityCandidate($this->user, 0);
+    familiarityCandidate($this->user, 3);
+
+    $sent = [];
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->twice()
+        ->andReturnUsing(function ($answers, $candidates) use (&$sent) {
+            $sent[] = $candidates->pluck('id')->sort()->values()->all();
+
+            return [];
+        });
+    $service = app(QuizService::class);
+    $answers = neutralAnswers(['familiarity' => 'familiar']);
+
+    $winner = $service->topMatch($this->user, $answers);
+    $service->runnerUp($this->user, $answers, $winner);
+
+    expect($sent[1])->toBe($sent[0])
+        ->and($sent[0])->toHaveCount(3);
+});
+
+it('returns a runner-up other than the winner using the same fit scores', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    $fresh = familiarityCandidate($this->user, 0);
+    $mid = familiarityCandidate($this->user, 2);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([
+        $visited->id => 0.0,
+        $fresh->id => 1.0,
+        $mid->id => 0.0,
+    ]);
+    $service = app(QuizService::class);
+    $answers = neutralAnswers(['familiarity' => 'familiar']);
+
+    $winner = $service->topMatch($this->user, $answers);
+    $runnerUp = $service->runnerUp($this->user, $answers, $winner);
+
+    expect($winner->id)->toBe($fresh->id)
+        ->and($runnerUp->id)->not->toBe($winner->id)
+        ->and($runnerUp->id)->toBe($visited->id);
+});
+
+it('does not ask Jev for fit when only one favorite is eligible', function () {
+    $only = familiarityCandidate($this->user, 1);
+
+    $this->mock(ScoreQuizFit::class)->shouldNotReceive('execute');
+
+    expect(app(QuizService::class)->topMatch($this->user, neutralAnswers())->id)->toBe($only->id);
+});
+
+it('keeps the deterministic tie winner when Jev returns no fit scores', function () {
+    $first = familiarityCandidate($this->user, 0);
+    familiarityCandidate($this->user, 0);
+    familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([]);
+
+    expect(app(QuizService::class)->topMatch($this->user, neutralAnswers())->id)->toBe($first->id);
+});
+
+it('makes a single Jev HTTP request for topMatch and runnerUp with the same answers', function () {
+    Cache::flush();
+    config(['services.typesafe.key' => 'test-key']);
+    $a = familiarityCandidate($this->user, 0);
+    $b = familiarityCandidate($this->user, 0);
+    Http::fake(['api.typesafe.ai/*' => Http::response(['answers' => [
+        "fit_{$a->id}" => ['type' => 'score', 'score' => 3, 'confidence' => 0.99],
+        "fit_{$b->id}" => ['type' => 'score', 'score' => 1, 'confidence' => 0.99],
+    ]])]);
+    $service = app(QuizService::class);
+    $answers = neutralAnswers();
+
+    $winner = $service->topMatch($this->user, $answers);
+    $runnerUp = $service->runnerUp($this->user, $answers, $winner);
+
+    expect($winner->id)->toBe($a->id)
+        ->and($runnerUp->id)->toBe($b->id);
+    Http::assertSentCount(1);
+});
