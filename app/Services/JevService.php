@@ -21,9 +21,10 @@ class JevService
      *
      * @param  array<string, mixed>|string  $state
      * @param  array<string, array{type: string, instructions: string, criteria?: array<int|string, string|null>}>  $questions
+     * @param  float|null  $minConfidence  Overrides `services.typesafe.min_confidence` for this call (e.g. 0.0 to weight answers by confidence instead of dropping them)
      * @return array<string, array{type: string, value: string|float, confidence: float}>|null Null when no API key is configured
      */
-    public function ask(array|string $state, array $questions): ?array
+    public function ask(array|string $state, array $questions, ?float $minConfidence = null): ?array
     {
         $key = config('services.typesafe.key');
 
@@ -67,7 +68,7 @@ class JevService
             $this->incrementQuota();
         }
 
-        return $this->parseAnswers($answers);
+        return $this->parseAnswers($answers, $minConfidence ?? (float) config('services.typesafe.min_confidence'));
     }
 
     private function quotaKey(): string
@@ -90,7 +91,7 @@ class JevService
      * @param  array<string, mixed>  $answers
      * @return array<string, array{type: string, value: string|float, confidence: float}>
      */
-    private function parseAnswers(array $answers): array
+    private function parseAnswers(array $answers, float $minConfidence): array
     {
         $parsed = [];
 
@@ -104,7 +105,7 @@ class JevService
             $confidence = $answer['confidence'] ?? null;
             $value = $answer[$type] ?? null;
 
-            if (! is_numeric($confidence) || $confidence < config('services.typesafe.min_confidence') || $value === null) {
+            if (! is_numeric($confidence) || $confidence < $minConfidence || $value === null) {
                 continue;
             }
 

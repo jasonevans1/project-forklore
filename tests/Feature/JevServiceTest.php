@@ -71,6 +71,16 @@ it('drops answers below the configured minimum confidence', function () {
     expect(array_keys(app(JevService::class)->ask('s', [])))->toBe(['ok']);
 });
 
+it('keeps answers below the configured minimum when the caller passes a lower minimum confidence', function () {
+    fakeJev([
+        'low' => ['type' => 'score', 'score' => 1.5, 'confidence' => 0.2],
+        'none' => ['type' => 'score', 'score' => 1.5],
+    ]);
+
+    expect(app(JevService::class)->ask('s', [], minConfidence: 0.0))
+        ->toBe(['low' => ['type' => 'score', 'value' => 1.5, 'confidence' => 0.2]]);
+});
+
 it('ignores answers that are missing a value or have an unknown type', function () {
     fakeJev([
         'novalue' => ['type' => 'choice', 'confidence' => 0.9],

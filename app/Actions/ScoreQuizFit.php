@@ -21,7 +21,7 @@ class ScoreQuizFit
      * Ask Jev, in one request, how well each candidate fits the quiz answers and weather.
      *
      * @param  Collection<int, Restaurant>  $restaurants
-     * @return array<int, float> Fit in [0, 1] keyed by restaurant id; restaurants without a confident answer are omitted
+     * @return array<int, float> Confidence-weighted fit in [0, 1] (fit × Jev confidence) keyed by restaurant id; restaurants without a numeric answer are omitted
      */
     public function execute(QuizAnswers $answers, Collection $restaurants, ?WeatherData $weather): array
     {
@@ -37,15 +37,16 @@ class ScoreQuizFit
             'restaurants' => $restaurants
                 ->map(fn (Restaurant $restaurant): array => $this->restaurantState($restaurant))
                 ->all(),
-        ], $this->questions($restaurants));
+        ], $this->questions($restaurants), minConfidence: 0.0);
 
         $fits = [];
 
         foreach ($restaurants as $restaurant) {
-            $value = $result["fit_{$restaurant->id}"]['value'] ?? null;
+            $answer = $result["fit_{$restaurant->id}"] ?? null;
 
-            if (is_numeric($value)) {
-                $fits[$restaurant->id] = min(1.0, max(0.0, (float) $value / self::MAX_SCORE));
+            if ($answer !== null && is_numeric($answer['value'])) {
+                $fit = min(1.0, max(0.0, (float) $answer['value'] / self::MAX_SCORE));
+                $fits[$restaurant->id] = round($fit * $answer['confidence'], 4);
             }
         }
 

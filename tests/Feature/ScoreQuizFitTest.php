@@ -80,9 +80,9 @@ it('returns a fit between 0 and 1 per restaurant from confident answers', functi
     [$a, $b, $c] = Restaurant::factory()->count(3)->create();
 
     $this->mock(JevService::class)->shouldReceive('ask')->andReturn([
-        "fit_{$a->id}" => ['type' => 'score', 'value' => 3.0, 'confidence' => 0.9],
-        "fit_{$b->id}" => ['type' => 'score', 'value' => 1.5, 'confidence' => 0.9],
-        "fit_{$c->id}" => ['type' => 'score', 'value' => 9.0, 'confidence' => 0.9],
+        "fit_{$a->id}" => ['type' => 'score', 'value' => 3.0, 'confidence' => 1.0],
+        "fit_{$b->id}" => ['type' => 'score', 'value' => 1.5, 'confidence' => 1.0],
+        "fit_{$c->id}" => ['type' => 'score', 'value' => 9.0, 'confidence' => 1.0],
     ]);
 
     $fits = app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$a, $b, $c]), null);
@@ -90,13 +90,38 @@ it('returns a fit between 0 and 1 per restaurant from confident answers', functi
     expect($fits)->toBe([$a->id => 1.0, $b->id => 0.5, $c->id => 1.0]);
 });
 
+it('weights each fit by Jev\'s confidence', function () {
+    [$a, $b] = Restaurant::factory()->count(2)->create();
+
+    $this->mock(JevService::class)->shouldReceive('ask')->andReturn([
+        "fit_{$a->id}" => ['type' => 'score', 'value' => 3.0, 'confidence' => 0.5],
+        "fit_{$b->id}" => ['type' => 'score', 'value' => 1.5, 'confidence' => 0.2],
+    ]);
+
+    $fits = app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$a, $b]), null);
+
+    expect($fits)->toBe([$a->id => 0.5, $b->id => 0.1]);
+});
+
+it('asks Jev for fit answers at any confidence', function () {
+    [$a, $b] = Restaurant::factory()->count(2)->create();
+
+    $this->mock(JevService::class)
+        ->shouldReceive('ask')
+        ->once()
+        ->withArgs(fn (mixed $state, mixed $questions, mixed $minConfidence = null): bool => $minConfidence === 0.0)
+        ->andReturn([]);
+
+    app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$a, $b]), null);
+});
+
 it('omits restaurants without a confident answer or with a non-numeric value', function () {
     [$a, $b, $c] = Restaurant::factory()->count(3)->create();
 
     $this->mock(JevService::class)->shouldReceive('ask')->andReturn([
-        "fit_{$a->id}" => ['type' => 'score', 'value' => 'great', 'confidence' => 0.9],
-        "fit_{$b->id}" => ['type' => 'score', 'value' => 3.0, 'confidence' => 0.9],
-        'fit_99999' => ['type' => 'score', 'value' => 3.0, 'confidence' => 0.9],
+        "fit_{$a->id}" => ['type' => 'score', 'value' => 'great', 'confidence' => 1.0],
+        "fit_{$b->id}" => ['type' => 'score', 'value' => 3.0, 'confidence' => 1.0],
+        'fit_99999' => ['type' => 'score', 'value' => 3.0, 'confidence' => 1.0],
     ]);
 
     $fits = app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$a, $b, $c]), null);
