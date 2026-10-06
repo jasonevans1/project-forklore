@@ -169,6 +169,54 @@ it('does not cache failed responses', function () {
         ->push(['error' => 'x'], 529)
         ->push(['answers' => ['a' => ['type' => 'noul', 'noul' => 0.5, 'confidence' => 0.9]]])]);
 
+    expect(app(JevService::class)->ask('s', []))->toBeNull();
+
+    $this->travel(61)->seconds();
+
+    expect(app(JevService::class)->ask('s', []))->toHaveKey('a');
+});
+
+it('does not retry an identical request within 60 seconds of a failure', function () {
+    Http::fake(['api.typesafe.ai/*' => Http::response(['error' => 'x'], 529)]);
+
     expect(app(JevService::class)->ask('s', []))->toBeNull()
-        ->and(app(JevService::class)->ask('s', []))->toHaveKey('a');
+        ->and(app(JevService::class)->ask('s', []))->toBeNull();
+    Http::assertSentCount(1);
+});
+
+it('retries an identical request after the failure window expires', function () {
+    Http::fake(['api.typesafe.ai/*' => Http::sequence()
+        ->push(['error' => 'x'], 529)
+        ->push(['answers' => ['a' => ['type' => 'noul', 'noul' => 0.5, 'confidence' => 0.9]]])]);
+
+    app(JevService::class)->ask('s', []);
+    $this->travel(61)->seconds();
+
+    expect(app(JevService::class)->ask('s', []))->toHaveKey('a');
+    Http::assertSentCount(2);
+});
+
+it('still sends a different request while another one is marked as failed', function () {
+    Http::fake(['api.typesafe.ai/*' => Http::sequence()
+        ->push(['error' => 'x'], 529)
+        ->push(['answers' => ['a' => ['type' => 'noul', 'noul' => 0.5, 'confidence' => 0.9]]])]);
+
+    app(JevService::class)->ask('one', []);
+
+    expect(app(JevService::class)->ask('two', []))->toHaveKey('a');
+    Http::assertSentCount(2);
+});
+
+it('remembers timeouts and connection errors as failures too', function () {
+    $attempts = 0;
+    Http::fake(['api.typesafe.ai/*' => function () use (&$attempts) {
+        $attempts++;
+
+        throw new ConnectionException('timeout');
+    }]);
+
+    app(JevService::class)->ask('s', []);
+    app(JevService::class)->ask('s', []);
+
+    expect($attempts)->toBe(1);
 });

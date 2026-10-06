@@ -13,6 +13,9 @@ class JevService
 
     private const VALUE_TYPES = ['choice', 'noul', 'score'];
 
+    /** Seconds an identical request is not retried after a failure. */
+    private const FAILURE_BACKOFF_SECONDS = 60;
+
     /**
      * Ask Jev typed questions about some state and return the confident answers.
      *
@@ -34,7 +37,7 @@ class JevService
         $answers = Cache::get($cacheKey);
 
         if ($answers === null) {
-            if ($this->isQuotaExceeded()) {
+            if (Cache::has($cacheKey.':failed') || $this->isQuotaExceeded()) {
                 return null;
             }
 
@@ -44,10 +47,14 @@ class JevService
                     ->acceptJson()
                     ->post(self::ENDPOINT, ['state' => $state, 'model' => $model, 'questions' => $questions]);
             } catch (ConnectionException) {
+                Cache::put($cacheKey.':failed', true, self::FAILURE_BACKOFF_SECONDS);
+
                 return null;
             }
 
             if ($response->failed()) {
+                Cache::put($cacheKey.':failed', true, self::FAILURE_BACKOFF_SECONDS);
+
                 if (in_array($response->status(), [401, 422], true)) {
                     Log::warning('Jev request failed', ['status' => $response->status()]);
                 }

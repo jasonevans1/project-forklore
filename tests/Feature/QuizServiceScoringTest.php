@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ScoreQuizFit;
 use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
 use App\Enums\ServiceLevel;
@@ -248,7 +249,7 @@ it('does not penalise weather_dependent restaurants in good weather', function (
 it('fetches weather for the answer coordinates when none is supplied', function () {
     $weather = Mockery::mock(WeatherService::class);
     $weather->shouldReceive('fetch')->once()->with(SCORING_USER_LAT, SCORING_USER_LNG)->andReturn(scoringWeather());
-    $service = new QuizService($weather);
+    $service = new QuizService($weather, app(ScoreQuizFit::class));
 
     $patio = Restaurant::factory()->for($this->user = User::factory()->create(), 'user')->create([
         'vibe_tags' => [], 'patio_quality' => PatioQuality::Destination, 'avg_duration_minutes' => null,
@@ -265,7 +266,7 @@ it('fetches weather for the answer coordinates when none is supplied', function 
 it('does not fetch weather unless both coordinates are present', function (?float $lat, ?float $lng) {
     $weather = Mockery::mock(WeatherService::class);
     $weather->shouldNotReceive('fetch');
-    $service = new QuizService($weather);
+    $service = new QuizService($weather, app(ScoreQuizFit::class));
 
     $user = User::factory()->create();
     Restaurant::factory()->for($user, 'user')->create();
