@@ -9,7 +9,7 @@
     <span class="text-lg font-semibold">🎲 {{ __('Surprise me') }}</span>
     <span class="text-sm text-neutral-500">{{ __('Pick the best match regardless of cuisine') }}</span>
 </button>
-<div class="grid grid-cols-4 gap-3">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
     @foreach ([
         \App\Enums\PrimaryCuisine::American,
         \App\Enums\PrimaryCuisine::Italian,

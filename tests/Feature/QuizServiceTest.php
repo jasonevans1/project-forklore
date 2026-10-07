@@ -456,9 +456,40 @@ it('includes restaurants regardless of service_options when dineInTakeout is eit
     expect($result)->not->toBeNull();
 });
 
+it('keeps restaurants with unknown service_options when dineInTakeout is takeout', function () {
+    $unknown = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => null,
+    ]);
+
+    $ranked = $this->service->ranked($this->user, neutralAnswers(['dineInTakeout' => 'takeout']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$unknown->id]);
+});
+
 // ---------------------------------------------------------------------------
 // Service level filtering
 // ---------------------------------------------------------------------------
+
+it('keeps restaurants with an unknown service_level when serviceLevel is quick_easy', function () {
+    $unknown = Restaurant::factory()->for($this->user, 'user')->create(['service_level' => null]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+
+    $ranked = $this->service->ranked($this->user, neutralAnswers(['serviceLevel' => 'quick_easy']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$unknown->id]);
+});
+
+it('does not count restaurants with unknown service data as excluded by the filters', function () {
+    Restaurant::factory()->for($this->user, 'user')->create(['service_level' => null, 'service_options' => null]);
+
+    $counts = $this->service->filterExclusionCounts(
+        $this->user,
+        neutralAnswers(['serviceLevel' => 'quick_easy', 'dineInTakeout' => 'takeout']),
+    );
+
+    expect($counts['serviceLevel'])->toBe(0)
+        ->and($counts['dineInTakeout'])->toBe(0);
+});
 
 it('includes only fast_food and fast_casual restaurants when serviceLevel is quick_easy', function () {
     $fastFood = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FastFood)->create();

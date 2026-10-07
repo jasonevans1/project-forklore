@@ -200,11 +200,12 @@ new #[Title('Vibe Check')] class extends Component {
 
         $ranked = app(QuizService::class)->ranked(Auth::user(), $this->buildAnswers(), $weather, $this->jevVibe);
 
-        $top = $ranked->first()['score'] ?? 0;
+        $top = $ranked->max('score');
+        $spread = $top - $ranked->min('score');
         $this->ranking = $ranked->map(fn (array $row): array => [
             'id' => $row['restaurant']->id,
             'name' => $row['restaurant']->name,
-            'percent' => $top > 0 ? max(0, (int) round($row['score'] / $top * 100)) : 0,
+            'percent' => $spread > 0 ? 10 + (int) round(($row['score'] - ($top - $spread)) / $spread * 90) : 100,
         ])->all();
         $this->heroIndex = 0;
 

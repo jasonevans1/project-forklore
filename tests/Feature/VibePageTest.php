@@ -284,18 +284,25 @@ it('lists every ranked favorite inside the collapsed score toggle', function () 
         ->not->toContain('<details open');
 });
 
-it('scales ranking scores so the top result is 100 percent', function () {
+it('spreads ranking scores between the lowest and highest score', function () {
     mockJev();
     mockRanked(craftedRanking([80, 40, 20]));
 
-    expect(array_column(submitVibe()->get('ranking'), 'percent'))->toBe([100, 50, 25]);
+    expect(array_column(submitVibe()->get('ranking'), 'percent'))->toBe([100, 40, 10]);
 });
 
-it('clamps negative scaled scores to zero', function () {
+it('gives the lowest ranked result a 10 percent bar even when its score is negative', function () {
     mockJev();
     mockRanked(craftedRanking([10, -5]));
 
-    expect(array_column(submitVibe()->get('ranking'), 'percent'))->toBe([100, 0]);
+    expect(array_column(submitVibe()->get('ranking'), 'percent'))->toBe([100, 10]);
+});
+
+it('gives every result a full bar when all scores tie', function () {
+    mockJev();
+    mockRanked(craftedRanking([50, 50]));
+
+    expect(array_column(submitVibe()->get('ranking'), 'percent'))->toBe([100, 100]);
 });
 
 it('shows the next ranked restaurant when the hero is rejected', function () {

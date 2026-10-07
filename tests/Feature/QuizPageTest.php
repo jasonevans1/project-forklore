@@ -612,13 +612,13 @@ it('renders the service level question with all 4 friendly labels', function () 
         ->assertSee('Special occasion');
 });
 
-it('renders 16 cuisine options plus a prominent Surprise me button in a 4x4 grid', function () {
+it('renders 16 cuisine options plus a prominent Surprise me button in a two-column grid on phones and four columns on wider screens', function () {
     expect(view()->exists('components.quiz.steps.cuisine'))->toBeTrue();
 
     $component = answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->assertSeeHtml("wire:click=\"answer('cuisine', null)\"")
         ->assertSee('Surprise me')
-        ->assertSeeHtml('grid grid-cols-4 gap-3');
+        ->assertSeeHtml('grid grid-cols-2 gap-3 sm:grid-cols-4');
 
     foreach (PrimaryCuisine::cases() as $cuisine) {
         if (in_array($cuisine, [PrimaryCuisine::AsianGeneral, PrimaryCuisine::Other], true)) {
