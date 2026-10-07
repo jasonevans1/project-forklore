@@ -1,7 +1,6 @@
 <flux:heading size="xl" class="text-2xl font-bold">
     {{ __('Something new or a familiar spot?') }}
 </flux:heading>
-<p class="text-sm text-neutral-500">{{ __('familiar') }}</p>
 <div class="flex flex-col gap-3">
     @foreach ([
         ['value' => 'new', 'label' => '🗺️ Something new', 'sub' => 'A place you haven\'t tried lately'],

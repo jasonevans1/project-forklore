@@ -1,7 +1,6 @@
 <flux:heading size="xl" class="text-2xl font-bold">
     {{ __('How far are you willing to go?') }}
 </flux:heading>
-<p class="text-sm text-neutral-500">{{ __('distance') }}</p>
 <div class="flex flex-col gap-3">
     @foreach ([
         ['value' => 'under_2_miles', 'label' => '📍 Under 2 mi'],

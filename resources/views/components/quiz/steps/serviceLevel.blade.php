@@ -1,7 +1,6 @@
 <flux:heading size="xl" class="text-2xl font-bold">
     {{ __('What kind of night is it?') }}
 </flux:heading>
-<p class="text-sm text-neutral-500">{{ __('serviceLevel') }}</p>
 <div class="flex flex-col gap-3">
     @foreach ([
         ['value' => 'quick_easy', 'label' => '⚡ Quick and easy'],

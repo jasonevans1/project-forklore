@@ -1,7 +1,6 @@
 <flux:heading size="xl" class="text-2xl font-bold">
     {{ __('Any cuisine in mind?') }}
 </flux:heading>
-<p class="text-sm text-neutral-500">{{ __('cuisine') }}</p>
 <button
     wire:click="answer('cuisine', null)"
     class="flex flex-col rounded-2xl border border-zinc-200 p-5 text-left dark:border-zinc-700"
