@@ -120,6 +120,26 @@ class QuizService
         return $scored->sortByDesc('score')->first()['restaurant'] ?? null;
     }
 
+    /**
+     * Rank every eligible favorite by combined score (deterministic + Jev fit), best first.
+     *
+     * @return Collection<int, array{restaurant: Restaurant, score: int}>
+     */
+    public function ranked(User $user, QuizAnswers $answers, ?WeatherData $weather = null, ?string $vibe = null): Collection
+    {
+        $pool = $this->buildPool($user, $answers);
+
+        if ($pool->isEmpty()) {
+            return collect();
+        }
+
+        $resolvedWeather = $weather ?? $this->resolveWeather($answers);
+
+        return $this->applyFitBonus($this->scoreAll($pool, $answers, $resolvedWeather, $user), $answers, $resolvedWeather, $vibe)
+            ->sort(fn (array $a, array $b): int => [$b['score'], $a['restaurant']->id] <=> [$a['score'], $b['restaurant']->id])
+            ->values();
+    }
+
     // -------------------------------------------------------------------------
     // Pool building
     // -------------------------------------------------------------------------
@@ -339,7 +359,7 @@ class QuizService
      * @param  Collection<int, array{restaurant: Restaurant, score: int}>  $scored
      * @return Collection<int, array{restaurant: Restaurant, score: int}>
      */
-    private function applyFitBonus(Collection $scored, QuizAnswers $answers, ?WeatherData $weather): Collection
+    private function applyFitBonus(Collection $scored, QuizAnswers $answers, ?WeatherData $weather, ?string $vibe = null): Collection
     {
         if ($scored->count() < 2) {
             return $scored;
@@ -351,7 +371,7 @@ class QuizService
             ->map(fn (array $entry): Restaurant => $entry['restaurant'])
             ->values();
 
-        $fits = $this->scoreQuizFit->execute($answers, $candidates, $weather);
+        $fits = $this->scoreQuizFit->execute($answers, $candidates, $weather, $vibe);
 
         if ($fits === []) {
             return $scored;

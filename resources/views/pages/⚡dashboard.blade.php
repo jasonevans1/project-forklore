@@ -35,6 +35,7 @@ new #[Title('Dashboard')] class extends Component {
                 ['number' => '02', 'route' => 'tonight', 'icon' => 'calendar', 'name' => __('Tonight'), 'description' => __('Find a spot with something happening tonight')],
                 ['number' => '03', 'route' => 'quiz', 'icon' => 'question-mark-circle', 'name' => __('Guided Quiz'), 'description' => __('Answer 5 questions to find your best match')],
                 ['number' => '04', 'route' => 'tournament', 'icon' => 'trophy', 'name' => __('Tournament'), 'description' => __('Head-to-head bracket until one winner remains')],
+                ['number' => '05', 'route' => 'vibe', 'icon' => 'sparkles', 'name' => __('Vibe Check'), 'description' => __('Describe your vibe, get one perfect match')],
             ] as $mode)
                 <a href="{{ route($mode['route']) }}" wire:navigate
                    class="flex items-baseline gap-4 py-4 hover:bg-ticket-bg">

@@ -66,6 +66,7 @@ new #[Title('History')] class extends Component {
                                     ModeUsed::Quiz       => __('Quiz'),
                                     ModeUsed::Tournament => __('Tournament'),
                                     ModeUsed::Tonight    => __('Tonight'),
+                                    ModeUsed::Vibe       => __('Vibe Check'),
                                     default              => $visit->mode_used->value,
                                 }"
                             >

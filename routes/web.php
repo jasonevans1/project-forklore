@@ -9,6 +9,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('pick', 'pages::pick')->name('pick');
     Route::livewire('tonight', 'pages::tonight')->name('tonight');
     Route::livewire('quiz', 'pages::quiz')->name('quiz');
+    Route::livewire('vibe', 'pages::vibe')->name('vibe');
     Route::livewire('tournament', 'pages::tournament')->name('tournament');
     Route::livewire('history', 'pages::history')->name('history');
 });

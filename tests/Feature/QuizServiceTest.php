@@ -915,3 +915,64 @@ it('makes a single Jev HTTP request for topMatch and runnerUp with the same answ
         ->and($runnerUp->id)->toBe($b->id);
     Http::assertSentCount(1);
 });
+
+// ---------------------------------------------------------------------------
+// ranked
+// ---------------------------------------------------------------------------
+
+it('ranks every eligible favorite by combined score highest first', function () {
+    $low = familiarityCandidate($this->user, 0);
+    $high = familiarityCandidate($this->user, 10);
+    $mid = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([$mid->id => 0.5]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$high->id, $mid->id, $low->id])
+        ->and($ranked->keys()->all())->toBe([0, 1, 2])
+        ->and($ranked->first()['score'])->toBeInt();
+});
+
+it('breaks score ties by lowest restaurant id first', function () {
+    $first = familiarityCandidate($this->user, 0);
+    $second = familiarityCandidate($this->user, 0);
+    $third = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers());
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$first->id, $second->id, $third->id]);
+});
+
+it('returns an empty collection when no favorites pass the hard filters', function () {
+    familiarityCandidate($this->user, 0);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['serviceLevel' => 'special_occasion']));
+
+    expect($ranked)->toBeEmpty();
+});
+
+it('passes the vibe text to the Jev fit scoring', function () {
+    familiarityCandidate($this->user, 0);
+    familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->once()
+        ->withArgs(fn ($answers, $candidates, $weather, $vibe = null) => $vibe === 'cozy and loud')
+        ->andReturn([]);
+
+    app(QuizService::class)->ranked($this->user, neutralAnswers(), null, 'cozy and loud');
+});
+
+it('adds the Jev fit bonus to the ranked scores', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    $fresh = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([$fresh->id => 1.0]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$fresh->id, $visited->id])
+        ->and($ranked->pluck('score')->all())->toBe([165, 155]);
+});
