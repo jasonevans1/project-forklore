@@ -238,25 +238,25 @@ it('shows the service level question on step 2', function () {
         ->test('pages::quiz')
         ->call('startQuiz')
         ->call('answer', 'dineInTakeout', 'either')
-        ->assertSee('serviceLevel');
+        ->assertSee('What kind of night is it?');
 });
 
 it('shows the cuisine question on step 3', function () {
     answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
-        ->assertSee('cuisine');
+        ->assertSee('Any cuisine in mind?');
 });
 
 it('shows the energy question on step 4', function () {
     answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->call('answer', 'cuisine', null)
-        ->assertSee('energy');
+        ->assertSee('What\'s your energy tonight?');
 });
 
 it('shows the hunger question on step 5', function () {
     answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'lively')
-        ->assertSee('hunger');
+        ->assertSee('How hungry are you?');
 });
 
 it('shows the distance question on step 6', function () {
@@ -264,7 +264,7 @@ it('shows the distance question on step 6', function () {
         ->call('answer', 'cuisine', null)
         ->call('answer', 'energy', 'lively')
         ->call('answer', 'hunger', 'moderate')
-        ->assertSee('distance');
+        ->assertSee('How far are you willing to go?');
 });
 
 it('shows the familiarity question on step 7', function () {
@@ -273,7 +273,7 @@ it('shows the familiarity question on step 7', function () {
         ->call('answer', 'energy', 'lively')
         ->call('answer', 'hunger', 'moderate')
         ->call('answer', 'distance', 'anywhere')
-        ->assertSee('familiar');
+        ->assertSee('Something new or a familiar spot?');
 });
 
 // ---------------------------------------------------------------------------
@@ -612,13 +612,18 @@ it('renders the service level question with all 4 friendly labels', function () 
         ->assertSee('Special occasion');
 });
 
-it('renders 16 cuisine options plus a prominent Surprise me button in a 4x4 grid', function () {
+it('does not show the raw field name under the cuisine question', function () {
+    answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
+        ->assertDontSeeHtml('<p class="text-sm text-neutral-500">cuisine</p>');
+});
+
+it('renders 16 cuisine options plus a prominent Surprise me button in a two-column grid on phones and four columns on wider screens', function () {
     expect(view()->exists('components.quiz.steps.cuisine'))->toBeTrue();
 
     $component = answerIntakeSteps(Livewire::actingAs($this->user)->test('pages::quiz'))
         ->assertSeeHtml("wire:click=\"answer('cuisine', null)\"")
         ->assertSee('Surprise me')
-        ->assertSeeHtml('grid grid-cols-4 gap-3');
+        ->assertSeeHtml('grid grid-cols-2 gap-3 sm:grid-cols-4');
 
     foreach (PrimaryCuisine::cases() as $cuisine) {
         if (in_array($cuisine, [PrimaryCuisine::AsianGeneral, PrimaryCuisine::Other], true)) {
@@ -1026,13 +1031,13 @@ it('renders exactly the 5 non-skipped steps end to end, starting from the entry 
         ->call('answer', 'dineInTakeout', 'either')
         ->assertSeeHtml("wire:click=\"answer('serviceLevel', 'quick_easy')\"")
         ->call('answer', 'serviceLevel', 'quick_easy')
-        ->assertSee('cuisine')
+        ->assertSee('Any cuisine in mind?')
         ->assertSee('Step 3 of 5')
         ->call('answer', 'cuisine', null)
-        ->assertSee('hunger')
+        ->assertSee('How hungry are you?')
         ->assertSee('Step 4 of 5')
         ->call('answer', 'hunger', 'moderate')
-        ->assertSee('distance')
+        ->assertSee('How far are you willing to go?')
         ->assertSee('Step 5 of 5')
         ->call('answer', 'distance', 'anywhere')
         ->assertSet('state', 'result');
@@ -1050,19 +1055,19 @@ it('renders all 7 steps end to end, starting from the entry screen, for a fine-d
         ->call('answer', 'dineInTakeout', 'either')
         ->assertSeeHtml("wire:click=\"answer('serviceLevel', 'special_occasion')\"")
         ->call('answer', 'serviceLevel', 'special_occasion')
-        ->assertSee('cuisine')
+        ->assertSee('Any cuisine in mind?')
         ->assertSee('Step 3 of 7')
         ->call('answer', 'cuisine', null)
-        ->assertSee('energy')
+        ->assertSee('What\'s your energy tonight?')
         ->assertSee('Step 4 of 7')
         ->call('answer', 'energy', 'lively')
-        ->assertSee('hunger')
+        ->assertSee('How hungry are you?')
         ->assertSee('Step 5 of 7')
         ->call('answer', 'hunger', 'moderate')
-        ->assertSee('distance')
+        ->assertSee('How far are you willing to go?')
         ->assertSee('Step 6 of 7')
         ->call('answer', 'distance', 'anywhere')
-        ->assertSee('familiar')
+        ->assertSee('Something new or a familiar spot?')
         ->assertSee('Step 7 of 7')
         ->call('answer', 'familiarity', 'either')
         ->assertSet('state', 'result');

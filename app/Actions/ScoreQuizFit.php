@@ -23,7 +23,7 @@ class ScoreQuizFit
      * @param  Collection<int, Restaurant>  $restaurants
      * @return array<int, float> Confidence-weighted fit in [0, 1] (fit × Jev confidence) keyed by restaurant id; restaurants without a numeric answer are omitted
      */
-    public function execute(QuizAnswers $answers, Collection $restaurants, ?WeatherData $weather): array
+    public function execute(QuizAnswers $answers, Collection $restaurants, ?WeatherData $weather, ?string $vibe = null): array
     {
         if ($restaurants->isEmpty()) {
             return [];
@@ -32,12 +32,13 @@ class ScoreQuizFit
         $restaurants = $restaurants->sortBy('id')->values();
 
         $result = $this->jev->ask([
+            ...($vibe === null ? [] : ['vibe' => $vibe]),
             'answers' => $this->answerState($answers),
             'weather' => $this->weatherState($weather),
             'restaurants' => $restaurants
                 ->map(fn (Restaurant $restaurant): array => $this->restaurantState($restaurant))
                 ->all(),
-        ], $this->questions($restaurants), minConfidence: 0.0);
+        ], $this->questions($restaurants, $vibe !== null), minConfidence: 0.0);
 
         $fits = [];
 
@@ -121,14 +122,15 @@ class ScoreQuizFit
      * @param  Collection<int, Restaurant>  $restaurants
      * @return array<string, array{type: string, instructions: string, criteria: list<string>}>
      */
-    private function questions(Collection $restaurants): array
+    private function questions(Collection $restaurants, bool $hasVibe): array
     {
+        $given = $hasVibe ? 'their described vibe, answers' : 'their answers';
         $questions = [];
 
         foreach ($restaurants as $restaurant) {
             $questions["fit_{$restaurant->id}"] = [
                 'type' => 'score',
-                'instructions' => "How well does the restaurant with id {$restaurant->id} ({$restaurant->name}) fit what this couple wants tonight, given their answers and the weather?",
+                'instructions' => "How well does the restaurant with id {$restaurant->id} ({$restaurant->name}) fit what this couple wants tonight, given {$given} and the weather?",
                 'criteria' => ['Poor fit', 'Okay fit', 'Good fit', 'Great fit'],
             ];
         }

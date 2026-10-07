@@ -9,4 +9,5 @@ enum ModeUsed: string
     case Event = 'event';
     case Quiz = 'quiz';
     case Tournament = 'tournament';
+    case Vibe = 'vibe';
 }

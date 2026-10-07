@@ -456,9 +456,40 @@ it('includes restaurants regardless of service_options when dineInTakeout is eit
     expect($result)->not->toBeNull();
 });
 
+it('keeps restaurants with unknown service_options when dineInTakeout is takeout', function () {
+    $unknown = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::Casual)->create([
+        'service_options' => null,
+    ]);
+
+    $ranked = $this->service->ranked($this->user, neutralAnswers(['dineInTakeout' => 'takeout']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$unknown->id]);
+});
+
 // ---------------------------------------------------------------------------
 // Service level filtering
 // ---------------------------------------------------------------------------
+
+it('keeps restaurants with an unknown service_level when serviceLevel is quick_easy', function () {
+    $unknown = Restaurant::factory()->for($this->user, 'user')->create(['service_level' => null]);
+    Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FineDining)->create();
+
+    $ranked = $this->service->ranked($this->user, neutralAnswers(['serviceLevel' => 'quick_easy']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$unknown->id]);
+});
+
+it('does not count restaurants with unknown service data as excluded by the filters', function () {
+    Restaurant::factory()->for($this->user, 'user')->create(['service_level' => null, 'service_options' => null]);
+
+    $counts = $this->service->filterExclusionCounts(
+        $this->user,
+        neutralAnswers(['serviceLevel' => 'quick_easy', 'dineInTakeout' => 'takeout']),
+    );
+
+    expect($counts['serviceLevel'])->toBe(0)
+        ->and($counts['dineInTakeout'])->toBe(0);
+});
 
 it('includes only fast_food and fast_casual restaurants when serviceLevel is quick_easy', function () {
     $fastFood = Restaurant::factory()->for($this->user, 'user')->withServiceLevel(ServiceLevel::FastFood)->create();
@@ -914,4 +945,65 @@ it('makes a single Jev HTTP request for topMatch and runnerUp with the same answ
     expect($winner->id)->toBe($a->id)
         ->and($runnerUp->id)->toBe($b->id);
     Http::assertSentCount(1);
+});
+
+// ---------------------------------------------------------------------------
+// ranked
+// ---------------------------------------------------------------------------
+
+it('ranks every eligible favorite by combined score highest first', function () {
+    $low = familiarityCandidate($this->user, 0);
+    $high = familiarityCandidate($this->user, 10);
+    $mid = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([$mid->id => 0.5]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$high->id, $mid->id, $low->id])
+        ->and($ranked->keys()->all())->toBe([0, 1, 2])
+        ->and($ranked->first()['score'])->toBeInt();
+});
+
+it('breaks score ties by lowest restaurant id first', function () {
+    $first = familiarityCandidate($this->user, 0);
+    $second = familiarityCandidate($this->user, 0);
+    $third = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers());
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$first->id, $second->id, $third->id]);
+});
+
+it('returns an empty collection when no favorites pass the hard filters', function () {
+    familiarityCandidate($this->user, 0);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['serviceLevel' => 'special_occasion']));
+
+    expect($ranked)->toBeEmpty();
+});
+
+it('passes the vibe text to the Jev fit scoring', function () {
+    familiarityCandidate($this->user, 0);
+    familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->once()
+        ->withArgs(fn ($answers, $candidates, $weather, $vibe = null) => $vibe === 'cozy and loud')
+        ->andReturn([]);
+
+    app(QuizService::class)->ranked($this->user, neutralAnswers(), null, 'cozy and loud');
+});
+
+it('adds the Jev fit bonus to the ranked scores', function () {
+    $visited = familiarityCandidate($this->user, 10);
+    $fresh = familiarityCandidate($this->user, 0);
+
+    $this->mock(ScoreQuizFit::class)->shouldReceive('execute')->andReturn([$fresh->id => 1.0]);
+
+    $ranked = app(QuizService::class)->ranked($this->user, neutralAnswers(['familiarity' => 'familiar']));
+
+    expect($ranked->pluck('restaurant.id')->all())->toBe([$fresh->id, $visited->id])
+        ->and($ranked->pluck('score')->all())->toBe([165, 155]);
 });

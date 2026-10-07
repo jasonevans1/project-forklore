@@ -120,13 +120,34 @@ class QuizService
         return $scored->sortByDesc('score')->first()['restaurant'] ?? null;
     }
 
+    /**
+     * Rank every eligible favorite by combined score (deterministic + Jev fit), best first.
+     *
+     * @return Collection<int, array{restaurant: Restaurant, score: int}>
+     */
+    public function ranked(User $user, QuizAnswers $answers, ?WeatherData $weather = null, ?string $vibe = null): Collection
+    {
+        $pool = $this->buildPool($user, $answers);
+
+        if ($pool->isEmpty()) {
+            return collect();
+        }
+
+        $resolvedWeather = $weather ?? $this->resolveWeather($answers);
+
+        return $this->applyFitBonus($this->scoreAll($pool, $answers, $resolvedWeather, $user), $answers, $resolvedWeather, $vibe)
+            ->sort(fn (array $a, array $b): int => [$b['score'], $a['restaurant']->id] <=> [$a['score'], $b['restaurant']->id])
+            ->values();
+    }
+
     // -------------------------------------------------------------------------
     // Pool building
     // -------------------------------------------------------------------------
 
     /**
      * Load user favorites and apply hard filters from the quiz answers
-     * (service level, dine-in/takeout, and distance).
+     * (service level, dine-in/takeout, and distance). Restaurants with unknown
+     * service data pass those filters — unknown is not a mismatch.
      *
      * @return Collection<int, Restaurant>
      */
@@ -134,24 +155,16 @@ class QuizService
     {
         $query = Restaurant::ownedBy($user)->favorites();
 
-        match ($answers->serviceLevel) {
-            'quick_easy' => $query->whereIn('service_level', [ServiceLevel::FastFood->value, ServiceLevel::FastCasual->value]),
-            'casual_sit_down' => $query->where('service_level', ServiceLevel::Casual->value),
-            'nicer_night_out' => $query->where('service_level', ServiceLevel::UpscaleCasual->value),
-            'special_occasion' => $query->where('service_level', ServiceLevel::FineDining->value),
-            default => null,
-        };
-
         if ($answers->cuisine !== null) {
             $query->where('primary_cuisine', $answers->cuisine);
         }
 
         $restaurants = $query->get();
 
-        // Apply dine-in/takeout filter in PHP — service_options is a JSON array column,
-        // and SQLite (the default/test connection) does not support whereJsonContains.
+        // Apply dine-in/takeout and service level filters in PHP so unknown values
+        // pass and filterExclusionCounts() shares the same predicates.
         $restaurants = $restaurants
-            ->reject(fn (Restaurant $r) => $this->excludedByDineInTakeout($r, $answers))
+            ->reject(fn (Restaurant $r) => $this->excludedByDineInTakeout($r, $answers) || $this->excludedByServiceLevel($r, $answers))
             ->values();
 
         // Apply distance filter when the user chose a bucket and coordinates are available.
@@ -209,7 +222,7 @@ class QuizService
 
     private function excludedByDineInTakeout(Restaurant $r, QuizAnswers $answers): bool
     {
-        if ($answers->dineInTakeout === 'either') {
+        if ($answers->dineInTakeout === 'either' || empty($r->service_options)) {
             return false;
         }
 
@@ -226,7 +239,7 @@ class QuizService
             default => null,
         };
 
-        if ($allowed === null) {
+        if ($allowed === null || $r->service_level === null) {
             return false;
         }
 
@@ -339,7 +352,7 @@ class QuizService
      * @param  Collection<int, array{restaurant: Restaurant, score: int}>  $scored
      * @return Collection<int, array{restaurant: Restaurant, score: int}>
      */
-    private function applyFitBonus(Collection $scored, QuizAnswers $answers, ?WeatherData $weather): Collection
+    private function applyFitBonus(Collection $scored, QuizAnswers $answers, ?WeatherData $weather, ?string $vibe = null): Collection
     {
         if ($scored->count() < 2) {
             return $scored;
@@ -351,7 +364,7 @@ class QuizService
             ->map(fn (array $entry): Restaurant => $entry['restaurant'])
             ->values();
 
-        $fits = $this->scoreQuizFit->execute($answers, $candidates, $weather);
+        $fits = $this->scoreQuizFit->execute($answers, $candidates, $weather, $vibe);
 
         if ($fits === []) {
             return $scored;

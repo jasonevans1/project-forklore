@@ -1,7 +1,6 @@
 <flux:heading size="xl" class="text-2xl font-bold">
     {{ __('How hungry are you?') }}
 </flux:heading>
-<p class="text-sm text-neutral-500">{{ __('hunger') }}</p>
 <div class="flex flex-col gap-3">
     @foreach ([
         ['value' => 'quick_bite', 'label' => '🥪 Quick bite', 'sub' => 'In and out fast'],

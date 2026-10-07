@@ -24,6 +24,9 @@
                     <flux:sidebar.item icon="question-mark-circle" :href="route('quiz')" :current="request()->routeIs('quiz')" wire:navigate>
                         {{ __('Quiz') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="sparkles" :href="route('vibe')" :current="request()->routeIs('vibe')" wire:navigate>
+                        {{ __('Vibe Check') }}
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="trophy" :href="route('tournament')" :current="request()->routeIs('tournament')" wire:navigate>
                         {{ __('Tournament') }}
                     </flux:sidebar.item>

@@ -168,3 +168,40 @@ it('leaves skipped or invalid quiz answers out of the Jev state', function () {
         null,
     );
 });
+
+it('includes the vibe text in the Jev state when given', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    $this->mock(JevService::class)
+        ->shouldReceive('ask')
+        ->once()
+        ->withArgs(fn (mixed $state): bool => array_keys($state) === ['vibe', 'answers', 'weather', 'restaurants']
+            && $state['vibe'] === 'cheesy and cozy')
+        ->andReturn([]);
+
+    app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$restaurant]), null, 'cheesy and cozy');
+});
+
+it('omits the vibe key from the Jev state when no vibe is given', function () {
+    $restaurant = Restaurant::factory()->create();
+
+    $this->mock(JevService::class)
+        ->shouldReceive('ask')
+        ->once()
+        ->withArgs(fn (mixed $state): bool => ! array_key_exists('vibe', $state))
+        ->andReturn([]);
+
+    app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$restaurant]), null);
+});
+
+it('mentions the described vibe in the fit question instructions when a vibe is given', function () {
+    $restaurant = Restaurant::factory()->create(['name' => 'Taco Place']);
+
+    $this->mock(JevService::class)
+        ->shouldReceive('ask')
+        ->once()
+        ->withArgs(fn (mixed $state, array $questions): bool => $questions["fit_{$restaurant->id}"]['instructions'] === "How well does the restaurant with id {$restaurant->id} (Taco Place) fit what this couple wants tonight, given their described vibe, answers and the weather?")
+        ->andReturn([]);
+
+    app(ScoreQuizFit::class)->execute(new QuizAnswers, collect([$restaurant]), null, 'cozy');
+});
