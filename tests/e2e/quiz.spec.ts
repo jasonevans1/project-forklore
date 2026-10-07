@@ -294,7 +294,7 @@ test.describe('guided quiz', () => {
         await page.getByRole('button', { name: /Casual sit-down/i }).click();
         await page.getByRole('button', { name: /Surprise me/i }).click();
         await page.getByRole('button', { name: /Moderate/i }).click(); // energy
-        await expect(page.getByText(/hunger/i)).toBeVisible();
+        await expect(page.getByText('How hungry are you?')).toBeVisible();
         await expect(page.getByRole('button', { name: /Quick bite/i })).toBeVisible();
         await expect(page.getByRole('button', { name: /Feast/i })).toBeVisible();
     });
@@ -520,7 +520,7 @@ test.describe('guided quiz', () => {
 
         await page.getByRole('button', { name: 'Start over' }).click();
         await expect(page.getByText('Step 1 of 7')).toBeVisible();
-        await expect(page.getByText(/dineInTakeout/i)).toBeVisible();
+        await expect(page.getByText('Dine in or takeout?')).toBeVisible();
     });
 
     // ── Going flow ────────────────────────────────────────────────────────────
