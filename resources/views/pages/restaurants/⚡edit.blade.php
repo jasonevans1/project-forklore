@@ -71,7 +71,7 @@ new #[Title('Edit restaurant')] class extends Component {
             'name' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
             'cuisine_tags' => ['required', 'string', 'max:500'],
-            'vibe_tags' => ['required', 'array', 'min:1'],
+            'vibe_tags' => ['array'],
             'vibe_tags.*' => [Rule::in(\Illuminate\Support\Arr::flatten(config('vibes')))],
             'price_level' => ['nullable', 'integer', 'between:1,4'],
             'patio_quality' => ['required', Rule::enum(PatioQuality::class)],

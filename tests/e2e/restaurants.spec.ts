@@ -250,16 +250,29 @@ test.describe('restaurant edit', () => {
         await expect(page.getByText(/required/i).first()).toBeVisible();
     });
 
-    test('shows a validation error when all vibe chips are deselected', async ({ page }) => {
-        await page.goto('/restaurants');
-        await page.getByRole('link', { name: 'Centro' }).click();
+    test('saves successfully when all vibe chips are deselected', async ({ page }) => {
+        // Use a throwaway restaurant (removed by e2e:reset) so the seeded rows keep their vibe tags.
+        const name = `E2E Vibe Clear ${Date.now()}`;
+
+        await page.goto('/restaurants/create');
+        await page.getByRole('button', { name: 'Add manually' }).click();
+        await page.getByRole('textbox', { name: 'Name' }).fill(name);
+        await page.getByRole('textbox', { name: 'Cuisine tags' }).fill('Test');
+        await page.getByRole('button', { name: 'casual' }).click();
+        await expect(page.getByRole('button', { name: 'casual' })).toHaveClass(/bg-\[var\(--color-accent\)\]/);
+        await page.getByRole('button', { name: 'Add restaurant' }).click();
+        await expect(page).toHaveURL(/\/restaurants$/);
+
+        await page.getByRole('link', { name }).click();
+        await page.waitForURL(/\/restaurants\/\d+$/);
+        const showUrl = page.url();
         await page.getByRole('link', { name: 'Edit' }).click();
-        // Deselect the pre-selected chip to produce an empty vibe_tags array
-        await page.getByRole('button', { name: 'date night' }).click();
+        // Deselect the only chip to produce an empty vibe_tags array
+        await page.getByRole('button', { name: 'casual' }).click();
         // Wait for Livewire to sync the deselection back to the parent component
-        await expect(page.getByRole('button', { name: 'date night' })).not.toHaveClass(/bg-\[var\(--color-accent\)\]/);
+        await expect(page.getByRole('button', { name: 'casual' })).not.toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('button', { name: 'Save changes' }).click();
-        await expect(page.getByText(/required/i).first()).toBeVisible();
+        await expect(page).toHaveURL(showUrl);
     });
 });
 

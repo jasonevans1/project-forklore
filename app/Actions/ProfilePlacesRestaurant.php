@@ -5,7 +5,6 @@ namespace App\Actions;
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
-use App\Enums\RestaurantSource;
 use App\Enums\ServiceLevel;
 use App\Models\Restaurant;
 use App\Services\JevService;
@@ -16,17 +15,21 @@ class ProfilePlacesRestaurant
 {
     private const WEATHER_DEPENDENT_THRESHOLD = 0.5;
 
+    private const USER_DEFAULTED_COLUMNS = ['patio_quality', 'indoor_vibe_when_cold'];
+
     public function __construct(public JevService $jev) {}
 
     /**
-     * Ask Jev about a Places restaurant and write each confident answer to its column.
-     * Fields without a usable answer keep their current value.
+     * Ask Jev about any unprofiled restaurant and write each confident answer to its column.
+     * Fields without a usable answer keep their current value. In only-empty-fields mode
+     * (hand-entered favorites) only null cuisine and service level are filled, and patio
+     * quality and indoor vibe are left alone since their defaults look like user choices.
      */
-    public function execute(Restaurant $restaurant): void
+    public function execute(Restaurant $restaurant, bool $onlyEmptyFields = false): void
     {
         $restaurant->refresh();
 
-        if ($restaurant->source !== RestaurantSource::Places || $restaurant->profiled_at !== null) {
+        if ($restaurant->profiled_at !== null) {
             return;
         }
 
@@ -37,13 +40,13 @@ class ProfilePlacesRestaurant
         }
 
         try {
-            $this->profile($restaurant);
+            $this->profile($restaurant, $onlyEmptyFields);
         } finally {
             Cache::forget($lockKey);
         }
     }
 
-    private function profile(Restaurant $restaurant): void
+    private function profile(Restaurant $restaurant, bool $onlyEmptyFields): void
     {
         $answers = $this->jev->ask([
             'name' => $restaurant->name,
@@ -59,6 +62,10 @@ class ProfilePlacesRestaurant
         $updates = ['profiled_at' => now()];
 
         foreach ($this->enumColumns() as $id => $enum) {
+            if ($onlyEmptyFields && ($restaurant->{$id} !== null || in_array($id, self::USER_DEFAULTED_COLUMNS, true))) {
+                continue;
+            }
+
             $value = $enum::tryFrom((string) ($answers[$id]['value'] ?? ''));
 
             if ($value !== null) {
@@ -66,11 +73,29 @@ class ProfilePlacesRestaurant
             }
         }
 
-        $weather = $answers['weather_dependent']['value'] ?? null;
         $tags = $restaurant->vibe_tags ?? [];
+        $hasVibeTags = array_diff($tags, ['weather_dependent']) !== [];
 
-        if ($weather !== null && (float) $weather >= self::WEATHER_DEPENDENT_THRESHOLD && ! in_array('weather_dependent', $tags, true)) {
-            $updates['vibe_tags'] = [...$tags, 'weather_dependent'];
+        if (! $hasVibeTags) {
+            foreach (config('vibes') as $group => $groupTags) {
+                $suggested = $answers["vibe_{$group}"]['value'] ?? null;
+
+                if (in_array($suggested, $groupTags, true)) {
+                    $tags[] = $suggested;
+                }
+            }
+        }
+
+        $weather = $answers['weather_dependent']['value'] ?? null;
+
+        if ($weather !== null && (float) $weather >= self::WEATHER_DEPENDENT_THRESHOLD) {
+            $tags[] = 'weather_dependent';
+        }
+
+        $tags = array_values(array_unique($tags));
+
+        if ($tags !== ($restaurant->vibe_tags ?? [])) {
+            $updates['vibe_tags'] = $tags;
         }
 
         $restaurant->update($updates);
@@ -123,7 +148,26 @@ class ProfilePlacesRestaurant
                 'type' => 'noul',
                 'instructions' => 'Is this place mainly outdoors or seasonal (food truck, rooftop, beer garden, patio-only), so bad weather makes it a poor choice?',
             ],
+            ...$this->vibeQuestions(),
         ];
+    }
+
+    /**
+     * @return array<string, array{type: string, instructions: string, criteria: array<string, string>}>
+     */
+    private function vibeQuestions(): array
+    {
+        $questions = [];
+
+        foreach (config('vibes') as $group => $tags) {
+            $questions["vibe_{$group}"] = [
+                'type' => 'choice',
+                'instructions' => "Which {$group} tag best describes this restaurant?",
+                'criteria' => array_combine($tags, array_map(fn (string $tag): string => ucfirst(str_replace('_', ' ', $tag)), $tags)),
+            ];
+        }
+
+        return $questions;
     }
 
     /**
