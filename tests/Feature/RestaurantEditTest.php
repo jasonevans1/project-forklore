@@ -167,7 +167,8 @@ it('saves an edited restaurant with all vibe tags removed', function () {
         ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
         ->set('vibe_tags', [])
         ->call('save')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertRedirect(route('restaurants.show', $restaurant));
 
     expect($restaurant->fresh()->vibe_tags)->toBe([]);
 });
