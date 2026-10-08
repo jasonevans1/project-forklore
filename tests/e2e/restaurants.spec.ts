@@ -250,7 +250,7 @@ test.describe('restaurant edit', () => {
         await expect(page.getByText(/required/i).first()).toBeVisible();
     });
 
-    test('shows a validation error when all vibe chips are deselected', async ({ page }) => {
+    test('saves successfully when all vibe chips are deselected', async ({ page }) => {
         await page.goto('/restaurants');
         await page.getByRole('link', { name: 'Centro' }).click();
         await page.getByRole('link', { name: 'Edit' }).click();
@@ -259,7 +259,7 @@ test.describe('restaurant edit', () => {
         // Wait for Livewire to sync the deselection back to the parent component
         await expect(page.getByRole('button', { name: 'date night' })).not.toHaveClass(/bg-\[var\(--color-accent\)\]/);
         await page.getByRole('button', { name: 'Save changes' }).click();
-        await expect(page.getByText(/required/i).first()).toBeVisible();
+        await expect(page).toHaveURL(/\/restaurants\/\d+$/);
     });
 });
 

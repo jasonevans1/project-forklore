@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ProfilePlacesRestaurant;
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
@@ -9,7 +10,9 @@ use App\Enums\ServiceOption;
 use App\Models\Restaurant;
 use App\Services\PlacesService;
 use Flux\Flux;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -83,6 +86,96 @@ new #[Title('Add restaurant')] class extends Component {
     }
 
     /**
+     * Save a Places result as a favorite in one tap, then defer full profiling.
+     */
+    public function quickAdd(int $index): void
+    {
+        $place = $this->searchResults[$index] ?? null;
+
+        if ($place === null) {
+            return;
+        }
+
+        $validator = Validator::make($place, [
+            'id' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'price_level' => ['nullable', 'integer', 'between:1,4'],
+            'lat' => ['nullable', 'numeric'],
+            'lng' => ['nullable', 'numeric'],
+            'types' => ['nullable', 'array'],
+            'types.*' => ['string'],
+        ]);
+
+        if ($validator->fails()) {
+            Flux::toast(variant: 'danger', text: __('That search result could not be added.'));
+
+            return;
+        }
+
+        $existing = Restaurant::where('places_id', $place['id'])->first();
+
+        if ($existing !== null) {
+            $this->claimOrReject($existing);
+
+            return;
+        }
+
+        try {
+            $restaurant = Restaurant::create([
+                'owner_user_id' => Auth::id(),
+                'name' => $place['name'],
+                'address' => ($place['address'] ?? null) ?: null,
+                'cuisine_tags' => PlacesService::cuisineTagsFromTypes($place['types'] ?? []) ?: ['restaurant'],
+                'vibe_tags' => [],
+                'price_level' => $place['price_level'] ?? null,
+                'source' => RestaurantSource::Favorite,
+                'lat' => $place['lat'] ?? null,
+                'lng' => $place['lng'] ?? null,
+                'places_id' => $place['id'],
+                'last_visited_at' => null,
+                'visit_count' => 0,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            $this->claimOrReject(Restaurant::where('places_id', $place['id'])->first());
+
+            return;
+        }
+
+        $this->finishQuickAdd($restaurant);
+    }
+
+    /**
+     * Turn the user's own Quick Pick-discovered row into a favorite; otherwise report a duplicate.
+     */
+    private function claimOrReject(?Restaurant $existing): void
+    {
+        if ($existing === null || $existing->source !== RestaurantSource::Places || $existing->owner_user_id !== Auth::id()) {
+            Flux::toast(variant: 'danger', text: __('This restaurant is already in the system.'));
+
+            return;
+        }
+
+        $existing->update(['source' => RestaurantSource::Favorite]);
+
+        $this->finishQuickAdd($existing);
+    }
+
+    /**
+     * Defer profiling (if still needed), toast, and go to the restaurant.
+     */
+    private function finishQuickAdd(Restaurant $restaurant): void
+    {
+        if ($restaurant->profiled_at === null) {
+            defer(fn () => rescue(fn () => app(ProfilePlacesRestaurant::class)->execute($restaurant), report: true), name: "profile-restaurant-{$restaurant->id}");
+        }
+
+        Flux::toast(variant: 'success', text: __('Restaurant added.'));
+
+        $this->redirect(route('restaurants.show', $restaurant), navigate: true);
+    }
+
+    /**
      * Save the new restaurant.
      */
     public function save(): void
@@ -91,7 +184,7 @@ new #[Title('Add restaurant')] class extends Component {
             'name' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:500'],
             'cuisine_tags' => ['required', 'string', 'max:500'],
-            'vibe_tags' => ['required', 'array', 'min:1'],
+            'vibe_tags' => ['array'],
             'vibe_tags.*' => [Rule::in(\Illuminate\Support\Arr::flatten(config('vibes')))],
             'price_level' => ['nullable', 'integer', 'between:1,4'],
             'patio_quality' => ['required', Rule::enum(PatioQuality::class)],
@@ -121,7 +214,7 @@ new #[Title('Add restaurant')] class extends Component {
             return;
         }
 
-        Restaurant::create([
+        $restaurant = Restaurant::create([
             'owner_user_id' => Auth::id(),
             'name' => $this->name,
             'address' => $this->address ?: null,
@@ -141,6 +234,8 @@ new #[Title('Add restaurant')] class extends Component {
             'last_visited_at' => null,
             'visit_count' => 0,
         ]);
+
+        defer(fn () => rescue(fn () => app(ProfilePlacesRestaurant::class)->execute($restaurant, onlyEmptyFields: true), report: true), name: "profile-restaurant-{$restaurant->id}");
 
         Flux::toast(variant: 'success', text: __('Restaurant added.'));
 
@@ -210,9 +305,14 @@ new #[Title('Add restaurant')] class extends Component {
                                             <p class="truncate font-semibold text-zinc-900 dark:text-white">{{ $place['name'] }}</p>
                                             <p class="mt-0.5 truncate text-sm text-zinc-500">{{ $place['address'] }}</p>
                                         </div>
-                                        <flux:button size="sm" variant="ghost" wire:click.stop="selectPlace({{ $i }})">
-                                            {{ __('Select') }}
-                                        </flux:button>
+                                        <div class="flex shrink-0 items-center gap-1">
+                                            <flux:button size="sm" variant="ghost" class="min-h-11" wire:click.stop="selectPlace({{ $i }})">
+                                                {{ __('Details') }}
+                                            </flux:button>
+                                            <flux:button size="sm" variant="primary" class="min-h-11" wire:click.stop="quickAdd({{ $i }})" wire:loading.attr="disabled">
+                                                {{ __('Add') }}
+                                            </flux:button>
+                                        </div>
                                     </div>
                                 </flux:card>
                             @endforeach

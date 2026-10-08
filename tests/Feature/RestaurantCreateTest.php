@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ProfilePlacesRestaurant;
 use App\Enums\IndoorVibe;
 use App\Enums\PatioQuality;
 use App\Enums\PrimaryCuisine;
@@ -36,7 +37,7 @@ it('requires non-empty cuisine_tags to save a restaurant', function () {
         ->assertHasErrors(['cuisine_tags']);
 });
 
-it('requires non-empty vibe_tags to save a restaurant', function () {
+it('saves a restaurant with no vibe tags as an empty array', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
 
     $this->actingAs($user);
@@ -46,7 +47,10 @@ it('requires non-empty vibe_tags to save a restaurant', function () {
         ->set('cuisine_tags', 'Italian')
         ->set('vibe_tags', [])
         ->call('save')
-        ->assertHasErrors(['vibe_tags']);
+        ->assertHasNoErrors()
+        ->assertRedirect(route('restaurants.index'));
+
+    expect(Restaurant::where('name', 'Test Place')->first()->vibe_tags)->toBe([]);
 });
 
 it('saves a restaurant with valid data and redirects to the index', function () {
@@ -125,7 +129,7 @@ it('surfaces validation errors without redirecting', function () {
         ->set('cuisine_tags', '')
         ->set('vibe_tags', [])
         ->call('save')
-        ->assertHasErrors(['name', 'cuisine_tags', 'vibe_tags'])
+        ->assertHasErrors(['name', 'cuisine_tags'])
         ->assertNoRedirect();
 });
 
@@ -172,20 +176,43 @@ it('saves the vibe_tags array directly to the database without splitting', funct
     expect($restaurant->vibe_tags)->toBe(['casual', 'cozy']);
 });
 
-it('rejects an empty vibe_tags array with a validation error', function () {
+it('profiles the new restaurant with only empty fields after a manual save', function () {
+    $this->withoutDefer();
     $user = User::factory()->create(['email_verified_at' => now()]);
-
     $this->actingAs($user);
 
+    $mock = Mockery::mock(ProfilePlacesRestaurant::class);
+    $mock->shouldReceive('execute')
+        ->once()
+        ->withArgs(fn (Restaurant $r, bool $onlyEmptyFields): bool => $r->name === 'Profiled Place' && $onlyEmptyFields === true);
+    app()->instance(ProfilePlacesRestaurant::class, $mock);
+
     Livewire::test('pages::restaurants.create')
-        ->set('name', 'Empty Vibe Place')
+        ->set('name', 'Profiled Place')
         ->set('cuisine_tags', 'Italian')
-        ->set('vibe_tags', [])
         ->call('save')
-        ->assertHasErrors(['vibe_tags']);
+        ->assertRedirect(route('restaurants.index'));
 });
 
-it('rejects vibe_tags not in the taxonomy with a validation error', function () {
+it('redirects to the index even when profiling throws', function () {
+    $this->withoutDefer();
+    $user = User::factory()->create(['email_verified_at' => now()]);
+    $this->actingAs($user);
+
+    $mock = Mockery::mock(ProfilePlacesRestaurant::class);
+    $mock->shouldReceive('execute')->once()->andThrow(new RuntimeException('jev down'));
+    app()->instance(ProfilePlacesRestaurant::class, $mock);
+
+    Livewire::test('pages::restaurants.create')
+        ->set('name', 'Throwing Place')
+        ->set('cuisine_tags', 'Italian')
+        ->call('save')
+        ->assertRedirect(route('restaurants.index'));
+
+    expect(Restaurant::where('name', 'Throwing Place')->exists())->toBeTrue();
+});
+
+it('still rejects vibe tags not in the taxonomy', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
 
     $this->actingAs($user);

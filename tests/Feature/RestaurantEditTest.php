@@ -155,7 +155,7 @@ it('persists updated vibe_tags array to the database', function () {
     expect($restaurant->fresh()->vibe_tags)->toBe(['lively', 'cozy']);
 });
 
-it('rejects an empty vibe_tags array on update', function () {
+it('saves an edited restaurant with all vibe tags removed', function () {
     $user = User::factory()->create(['email_verified_at' => now()]);
     $restaurant = Restaurant::factory()->create([
         'owner_user_id' => $user->id,
@@ -167,8 +167,9 @@ it('rejects an empty vibe_tags array on update', function () {
         ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
         ->set('vibe_tags', [])
         ->call('save')
-        ->assertHasErrors(['vibe_tags'])
-        ->assertNoRedirect();
+        ->assertHasNoErrors();
+
+    expect($restaurant->fresh()->vibe_tags)->toBe([]);
 });
 
 it('rejects vibe_tags containing a tag not in the taxonomy', function () {
@@ -216,22 +217,6 @@ it('shows validation errors without redirecting when cuisine tags are empty', fu
         ->set('cuisine_tags', '')
         ->call('save')
         ->assertHasErrors(['cuisine_tags'])
-        ->assertNoRedirect();
-});
-
-it('shows validation errors without redirecting when vibe_tags is an empty array', function () {
-    $user = User::factory()->create(['email_verified_at' => now()]);
-    $restaurant = Restaurant::factory()->create([
-        'owner_user_id' => $user->id,
-        'cuisine_tags' => ['Italian'],
-        'vibe_tags' => ['casual'],
-    ]);
-
-    Livewire::actingAs($user)
-        ->test('pages::restaurants.edit', ['restaurant' => $restaurant])
-        ->set('vibe_tags', [])
-        ->call('save')
-        ->assertHasErrors(['vibe_tags'])
         ->assertNoRedirect();
 });
 
