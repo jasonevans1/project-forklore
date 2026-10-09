@@ -2,12 +2,6 @@
 
 $ignoreErrors = [];
 $ignoreErrors[] = [
-	'message' => '#^Method App\\\\Actions\\\\Fortify\\\\CreateNewUser\\:\\:passwordRules\\(\\) should return array\\<int, array\\<mixed\\>\\|Illuminate\\\\Contracts\\\\Validation\\\\ValidationRule\\|string\\> but returns array\\<int, Illuminate\\\\Validation\\\\Rules\\\\Password\\|string\\>\\.$#',
-	'identifier' => 'return.type',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Actions/Fortify/CreateNewUser.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Method App\\\\Actions\\\\Fortify\\\\ResetUserPassword\\:\\:passwordRules\\(\\) should return array\\<int, array\\<mixed\\>\\|Illuminate\\\\Contracts\\\\Validation\\\\ValidationRule\\|string\\> but returns array\\<int, Illuminate\\\\Validation\\\\Rules\\\\Password\\|string\\>\\.$#',
 	'identifier' => 'return.type',
 	'count' => 1,
