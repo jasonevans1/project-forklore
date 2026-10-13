@@ -20,12 +20,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Method App\\\\Livewire\\\\Actions\\\\Logout\\:\\:__invoke\\(\\) has no return type specified\\.$#',
-	'identifier' => 'missingType.return',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Livewire/Actions/Logout.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Property App\\\\Livewire\\\\VibePicker\\:\\:\\$selected type has no value type specified in iterable type array\\.$#',
 	'identifier' => 'missingType.iterableValue',
 	'count' => 1,
