@@ -8,6 +8,9 @@ use Livewire\Component;
 
 class VibePicker extends Component
 {
+    /**
+     * @var array<int, string>
+     */
     #[Modelable]
     public array $selected = [];
 

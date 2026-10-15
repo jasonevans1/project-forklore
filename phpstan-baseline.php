@@ -20,12 +20,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Property App\\\\Livewire\\\\VibePicker\\:\\:\\$selected type has no value type specified in iterable type array\\.$#',
-	'identifier' => 'missingType.iterableValue',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Livewire/VibePicker.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Using nullsafe property access "\\?\\-\\>preferred_vibe_tags" on left side of \\?\\? is unnecessary\\. Use \\-\\> instead\\.$#',
 	'identifier' => 'nullsafe.neverNull',
 	'count' => 1,
