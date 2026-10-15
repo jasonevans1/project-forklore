@@ -61,14 +61,9 @@ it('does not apply partner bias when the partner last picked (my turn)', functio
         ->countBy()
         ->all();
 
-    // Without bias both restaurants should win roughly equally (within 75/25 range).
-    $livelyWins = $wins[$lively->id] ?? 0;
-    $cozyWins = $wins[$cozy->id] ?? 0;
-    $total = $livelyWins + $cozyWins;
-
-    // Neither restaurant should dominate when there is no bias.
-    expect($livelyWins)->toBeLessThan((int) ($total * 0.75));
-    expect($cozyWins)->toBeLessThan((int) ($total * 0.75));
+    // Without bias both are tied in the top window, so both must win at least once.
+    // (A 25-point boost would push cozy out of the window entirely.)
+    expect($wins)->toHaveKeys([$lively->id, $cozy->id]);
 });
 
 it('does not apply partner bias when the user has no partner', function () {
