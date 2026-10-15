@@ -20,12 +20,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Using nullsafe property access "\\?\\-\\>preferred_vibe_tags" on left side of \\?\\? is unnecessary\\. Use \\-\\> instead\\.$#',
-	'identifier' => 'nullsafe.neverNull',
-	'count' => 1,
-	'path' => __DIR__ . '/app/Services/QuizService.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Parameter \\#1 \\$string of function rtrim expects string, bool\\|string given\\.$#',
 	'identifier' => 'argument.type',
 	'count' => 1,

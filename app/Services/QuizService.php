@@ -389,7 +389,7 @@ class QuizService
             return [];
         }
 
-        return $user->partner?->preferred_vibe_tags ?? [];
+        return $user->partner->preferred_vibe_tags ?? [];
     }
 
     private function resolveWeather(QuizAnswers $answers): ?WeatherData
