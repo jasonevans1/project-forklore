@@ -20,12 +20,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Parameter \\#1 \\$string of function rtrim expects string, bool\\|string given\\.$#',
-	'identifier' => 'argument.type',
-	'count' => 1,
-	'path' => __DIR__ . '/config/filesystems.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Call to an undefined method Illuminate\\\\Database\\\\Schema\\\\ForeignKeyDefinition\\:\\:index\\(\\)\\.$#',
 	'identifier' => 'method.notFound',
 	'count' => 1,
