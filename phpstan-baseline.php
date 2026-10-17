@@ -20,12 +20,6 @@ $ignoreErrors[] = [
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
 $ignoreErrors[] = [
-	'message' => '#^Call to an undefined method Illuminate\\\\Database\\\\Schema\\\\ForeignKeyDefinition\\:\\:index\\(\\)\\.$#',
-	'identifier' => 'method.notFound',
-	'count' => 1,
-	'path' => __DIR__ . '/database/migrations/2026_04_29_022521_create_restaurants_table.php',
-];
-$ignoreErrors[] = [
 	'message' => '#^Call to an undefined method Illuminate\\\\Database\\\\Schema\\\\ForeignKeyDefinition\\:\\:after\\(\\)\\.$#',
 	'identifier' => 'method.notFound',
 	'count' => 1,
