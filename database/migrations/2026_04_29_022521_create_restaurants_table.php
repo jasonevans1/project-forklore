@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('restaurants', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('owner_user_id')->constrained('users')->cascadeOnDelete()->index();
+            $table->foreignId('owner_user_id')->constrained('users')->cascadeOnDelete();
+            $table->index('owner_user_id');
             $table->string('name');
             $table->string('address')->nullable();
             $table->decimal('lat', 10, 7)->nullable();
