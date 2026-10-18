@@ -19,11 +19,5 @@ $ignoreErrors[] = [
 	'count' => 1,
 	'path' => __DIR__ . '/app/Concerns/ValidatesEventFields.php',
 ];
-$ignoreErrors[] = [
-	'message' => '#^Call to an undefined method Illuminate\\\\Database\\\\Schema\\\\ForeignKeyDefinition\\:\\:after\\(\\)\\.$#',
-	'identifier' => 'method.notFound',
-	'count' => 1,
-	'path' => __DIR__ . '/database/migrations/2026_04_30_030807_add_partner_id_to_users_table.php',
-];
 
 return ['parameters' => ['ignoreErrors' => $ignoreErrors]];
