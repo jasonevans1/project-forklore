@@ -390,3 +390,85 @@ it('excludes restaurants without coordinates when a distance bucket applies', fu
 
     expect($result)->toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// Empty pools, supplied weather and exact scores
+// ---------------------------------------------------------------------------
+
+it('does not fetch weather when no favorites pass the filters', function () {
+    $weather = Mockery::mock(WeatherService::class);
+    $weather->shouldNotReceive('fetch');
+    $service = new QuizService($weather, app(ScoreQuizFit::class));
+    $user = User::factory()->create();
+    $answers = new QuizAnswers(lat: SCORING_USER_LAT, lng: SCORING_USER_LNG);
+
+    expect($service->ranked($user, $answers))->toBeEmpty()
+        ->and($service->runnerUp($user, $answers, Restaurant::factory()->for($user, 'user')->create(['source' => 'places'])))->toBeNull()
+        ->and($service->topMatch($user, $answers))->toBeNull();
+});
+
+it('uses the supplied weather for ranked instead of fetching', function () {
+    $weather = Mockery::mock(WeatherService::class);
+    $weather->shouldNotReceive('fetch');
+    $service = new QuizService($weather, app(ScoreQuizFit::class));
+    $user = User::factory()->create();
+    Restaurant::factory()->for($user, 'user')->create();
+
+    $ranked = $service->ranked($user, new QuizAnswers(lat: SCORING_USER_LAT, lng: SCORING_USER_LNG), scoringWeather());
+
+    expect($ranked)->toHaveCount(1);
+});
+
+it('reports the exact combined score in ranked, rounding the Jev bonus to nearest', function (float $fit, int $bonus) {
+    $user = User::factory()->create();
+    $first = scoringRestaurant($user, [], 25);
+    $second = scoringRestaurant($user, [], 25);
+    $fitScorer = Mockery::mock(ScoreQuizFit::class);
+    $fitScorer->shouldReceive('execute')->once()->andReturn([$first->id => $fit, $second->id => 0.0]);
+    $service = new QuizService(app(WeatherService::class), $fitScorer);
+
+    $ranked = $service->ranked($user, new QuizAnswers);
+
+    expect($ranked->first()['restaurant']->id)->toBe($first->id)
+        ->and($ranked->first()['score'])->toBe(100 + 25 + $bonus)
+        ->and($ranked->last()['score'])->toBe(125);
+})->with([
+    'rounds down below half' => [0.012, 0],
+    'rounds up above half' => [0.013, 1],
+    'full fit' => [1.0, 40],
+]);
+
+it('scores an unrecognized familiarity answer as a neutral zero', function () {
+    $user = User::factory()->create();
+    scoringRestaurant($user, ['visit_count' => 3], 25);
+
+    $ranked = app(QuizService::class)->ranked($user, new QuizAnswers(familiarity: 'either'));
+
+    expect($ranked->first()['score'])->toBe(125);
+});
+
+it('measures distance with the exact haversine formula', function () {
+    $user = User::factory()->create();
+    $target = 15.000014;
+    $lowLat = SCORING_USER_LAT;
+    $highLat = SCORING_USER_LAT + 1.0;
+    $haversine = function (float $lat) use ($target): float {
+        $dLat = deg2rad($lat - SCORING_USER_LAT);
+        $a = sin($dLat / 2) ** 2;
+
+        return 3958.8 * 2.0 * atan2(sqrt($a), sqrt(1.0 - $a)) - $target;
+    };
+    for ($i = 0; $i < 60; $i++) {
+        $mid = ($lowLat + $highLat) / 2;
+        $haversine($mid) < 0 ? $lowLat = $mid : $highLat = $mid;
+    }
+    Restaurant::factory()->for($user, 'user')->create(['lat' => round($lowLat, 7), 'lng' => SCORING_USER_LNG]);
+
+    $result = app(QuizService::class)->topMatch(
+        $user,
+        new QuizAnswers(distance: '5_to_15_miles', lat: SCORING_USER_LAT, lng: SCORING_USER_LNG),
+        scoringWeather(),
+    );
+
+    expect($result)->toBeNull();
+});
