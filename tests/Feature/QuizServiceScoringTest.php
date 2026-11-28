@@ -472,3 +472,22 @@ it('measures distance with the exact haversine formula', function () {
 
     expect($result)->toBeNull();
 });
+
+it('treats a restaurant exactly on a bucket boundary as belonging to the lower bucket', function (string $bucket, float $userLat, bool $included) {
+    $user = User::factory()->create();
+    Restaurant::factory()->for($user, 'user')->create(['lat' => 0.0, 'lng' => 0.0]);
+
+    $result = app(QuizService::class)->topMatch(
+        $user,
+        new QuizAnswers(distance: $bucket, lat: $userLat, lng: 0.0),
+        scoringWeather(),
+    );
+
+    expect($result !== null)->toBe($included);
+})->with([
+    'under_2 includes exactly 2 miles' => ['under_2_miles', 0.028946033905770597, true],
+    '2_to_5 excludes exactly 2 miles' => ['2_to_5_miles', 0.028946033905770597, false],
+    '2_to_5 includes exactly 5 miles' => ['2_to_5_miles', 0.07236508476442649, true],
+    '5_to_15 excludes exactly 5 miles' => ['5_to_15_miles', 0.07236508476442649, false],
+    '5_to_15 includes exactly 15 miles' => ['5_to_15_miles', 0.21709525429327947, true],
+]);
